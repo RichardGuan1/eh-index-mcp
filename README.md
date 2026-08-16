@@ -121,6 +121,10 @@ npm run smoke
 - Issues: https://github.com/RichardGuan1/eh-index-mcp/issues
 - npm: https://www.npmjs.com/package/eh-index-mcp
 
+## Disclaimer
+
+EH Index MCP is an unofficial community project. It is not affiliated with, endorsed by, or operated by E-Hentai, ExHentai, or their operators. Users are responsible for complying with applicable laws, site rules, and account requirements when using this software. Any credentials supplied to the server remain the user's responsibility. Site availability, page structure, and returned data may change without notice and are not guaranteed by this project.
+
 ## License
 
 MIT
