@@ -15,7 +15,7 @@ describe("package layout", () => {
     expect(packageJson.name).toBe("eh-index-mcp");
     expect(packageJson.bin).toEqual({ "eh-index-mcp": "dist/index.js" });
     expect(packageJson.engines.node).toBe(">=20.3");
-    expect(packageJson.author).toBe("Gorde Minchel");
+    expect(packageJson.author).toBe("Richard Guan");
     expect(packageJson.repository).toEqual({
       type: "git",
       url: "git+https://github.com/RichardGuan1/eh-index-mcp.git",
@@ -31,7 +31,7 @@ describe("package layout", () => {
       "read-only",
     ]));
     const license = readFileSync(new URL("../LICENSE", import.meta.url), "utf8");
-    expect(license).toContain("Copyright (c) 2026 Gorde Minchel");
+    expect(license).toContain("Copyright (c) 2026 Richard Guan");
   });
 
   it("keeps public repository documentation free of machine-local paths and proxy endpoints", () => {
