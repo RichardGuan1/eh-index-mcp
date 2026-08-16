@@ -8,18 +8,16 @@ A read-only local MCP server for E-Hentai and ExHentai. It exposes gallery, SHA-
 - Network access to `e-hentai.org`
 - Optional E-Hentai identity cookies for favorites, archive options, and ExHentai
 
-## Install and build
+## Installation
 
 ```bash
-npm install
-npm run build
-npm test
+npm install --global eh-index-mcp
 ```
 
-The stdio entry point is:
+You can then run the stdio server as:
 
-```text
-dist/index.js
+```bash
+eh-index-mcp
 ```
 
 ## Authentication
@@ -43,8 +41,8 @@ Generic stdio configuration:
 {
   "mcpServers": {
     "eh-index": {
-      "command": "node",
-      "args": ["<absolute-path-to-project>/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "eh-index-mcp"],
       "env": {
         "EH_MEMBER_ID": "your_ipb_member_id",
         "EH_PASS_HASH": "your_ipb_pass_hash",
@@ -109,11 +107,19 @@ Gallery titles, uploader names, tags, comments, EHWiki definitions, and other re
 ## Development
 
 ```bash
+npm install
+npm run build
 npm run check
 npm run smoke
 ```
 
 `npm run smoke` starts the built stdio server through a real MCP client, selects a current gallery from the live popular list, and performs a small public check. It also verifies stable fields from a known EHWiki tag definition so parser regressions cannot pass on a non-empty response alone. It does not download gallery images or torrent files.
+
+## Project links
+
+- Repository: https://github.com/RichardGuan1/eh-index-mcp
+- Issues: https://github.com/RichardGuan1/eh-index-mcp/issues
+- npm: https://www.npmjs.com/package/eh-index-mcp
 
 ## License
 

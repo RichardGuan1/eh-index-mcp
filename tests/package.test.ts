@@ -15,6 +15,23 @@ describe("package layout", () => {
     expect(packageJson.name).toBe("eh-index-mcp");
     expect(packageJson.bin).toEqual({ "eh-index-mcp": "dist/index.js" });
     expect(packageJson.engines.node).toBe(">=20.3");
+    expect(packageJson.author).toBe("Gorde Minchel");
+    expect(packageJson.repository).toEqual({
+      type: "git",
+      url: "git+https://github.com/RichardGuan1/eh-index-mcp.git",
+    });
+    expect(packageJson.homepage).toBe("https://github.com/RichardGuan1/eh-index-mcp#readme");
+    expect(packageJson.bugs).toEqual({ url: "https://github.com/RichardGuan1/eh-index-mcp/issues" });
+    expect(packageJson.publishConfig).toEqual({ access: "public" });
+    expect(packageJson.keywords).toEqual(expect.arrayContaining([
+      "mcp",
+      "model-context-protocol",
+      "e-hentai",
+      "exhentai",
+      "read-only",
+    ]));
+    const license = readFileSync(new URL("../LICENSE", import.meta.url), "utf8");
+    expect(license).toContain("Copyright (c) 2026 Gorde Minchel");
   });
 
   it("keeps public repository documentation free of machine-local paths and proxy endpoints", () => {

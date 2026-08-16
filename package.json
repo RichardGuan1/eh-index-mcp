@@ -2,6 +2,28 @@
   "name": "eh-index-mcp",
   "version": "0.1.0",
   "description": "Read-only MCP server for E-Hentai and ExHentai",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "e-hentai",
+    "exhentai",
+    "gallery",
+    "metadata",
+    "read-only"
+  ],
+  "author": "Gorde Minchel",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RichardGuan1/eh-index-mcp.git"
+  },
+  "homepage": "https://github.com/RichardGuan1/eh-index-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/RichardGuan1/eh-index-mcp/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "bin": {
     "eh-index-mcp": "dist/index.js"
@@ -34,6 +56,5 @@
     "tsx": "^4.23.12",
     "typescript": "^7.0.2",
     "vitest": "^3.2.4"
-  },
-  "license": "MIT"
+  }
 }
