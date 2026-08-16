@@ -268,6 +268,36 @@ export interface TagDefinitionResult {
   untrusted: true;
 }
 
+export interface TagTranslationSource {
+  repository: "https://github.com/EhTagTranslation/Database";
+  revision: string;
+  version: number;
+  license: "CC BY-NC-SA 3.0 CN";
+}
+
+export interface TagTranslationEntry {
+  namespace: string;
+  tag: string;
+  translatedName: string;
+  intro: string;
+}
+
+export interface TagTranslationDatabase {
+  source: TagTranslationSource;
+  entries: TagTranslationEntry[];
+}
+
+export interface TagTranslationMatch extends TagTranslationEntry {
+  searchQuery: string;
+  match: "name-exact" | "tag-exact" | "name-contains" | "tag-contains";
+}
+
+export interface TagTranslationSearchResult {
+  source: TagTranslationSource;
+  untrusted: true;
+  matches: TagTranslationMatch[];
+}
+
 export interface GalleryVersionComparison {
   before: GalleryMetadata;
   after: GalleryMetadata;

@@ -29,7 +29,7 @@ function assertResult(result, label) {
 try {
   await client.connect(transport);
   const tools = await client.listTools();
-  if (tools.tools.length !== 25) throw new Error(`Expected 25 tools, received ${tools.tools.length}`);
+  if (tools.tools.length !== 26) throw new Error(`Expected 26 tools, received ${tools.tools.length}`);
 
   const popular = assertResult(await client.callTool({
     name: "eh_get_popular",
@@ -65,6 +65,23 @@ try {
     arguments: { includeTags: ["language:chinese"], exactTags: true },
   }), "build search query");
   if (query.result?.query !== "language:chinese$") throw new Error("Structured query result was unexpected");
+
+  const translatedTags = assertResult(await client.callTool({
+    name: "eh_search_translated_tags",
+    arguments: { query: "女男女3P", limit: 5 },
+  }), "translated tags");
+  const translatedTag = translatedTags.result?.matches?.[0];
+  if (
+    translatedTags.result?.source?.repository !== "https://github.com/EhTagTranslation/Database"
+    || translatedTags.result?.source?.license !== "CC BY-NC-SA 3.0 CN"
+    || translatedTags.result?.untrusted !== true
+    || translatedTag?.namespace !== "mixed"
+    || translatedTag?.tag !== "ffm threesome"
+    || translatedTag?.searchQuery !== 'mixed:"ffm threesome"$'
+    || translatedTag?.match !== "name-exact"
+  ) {
+    throw new Error("Translated tag lookup returned unexpected source metadata or tag semantics");
+  }
 
   const tagDefinition = assertResult(await client.callTool({
     name: "eh_lookup_tag_definition",
@@ -191,6 +208,8 @@ try {
     hashResultCount,
     localFileSha1: fileSearch.result.sha1,
     builtQuery: query.result.query,
+    translatedTagCount: translatedTags.result.matches.length,
+    translatedTag: translatedTag.tag,
     tagDefinitionTitle: tagDefinition.result.title,
     detailTagGroups: detail.result.tagGroups.length,
     torrentCount,

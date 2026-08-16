@@ -46,6 +46,7 @@ describe("MCP server", () => {
       "eh_search_by_hash",
       "eh_search_favorites",
       "eh_search_galleries",
+      "eh_search_translated_tags",
     ]);
     expect(tools.tools.every((tool) => tool.annotations?.readOnlyHint === true)).toBe(true);
     expect(tools.tools.every((tool) => tool.outputSchema !== undefined)).toBe(true);
@@ -105,6 +106,23 @@ describe("MCP server", () => {
         sourceUrl: "https://ehwiki.org/wiki/ai_generated",
         untrusted: true as const,
       })),
+      searchTranslatedTags: vi.fn(async () => ({
+        source: {
+          repository: "https://github.com/EhTagTranslation/Database" as const,
+          revision: "0123456789abcdef0123456789abcdef01234567",
+          version: 7,
+          license: "CC BY-NC-SA 3.0 CN" as const,
+        },
+        untrusted: true as const,
+        matches: [{
+          namespace: "mixed",
+          tag: "ffm threesome",
+          translatedName: "女男女3P",
+          intro: "2 女 1 男。",
+          searchQuery: 'mixed:"ffm threesome"$',
+          match: "name-contains" as const,
+        }],
+      })),
     };
     const server = createServer(backend as never);
     const client = new Client({ name: "test-client", version: "1.0.0" });
@@ -132,6 +150,13 @@ describe("MCP server", () => {
     const definition = await client.callTool({ name: "eh_lookup_tag_definition", arguments: { tag: "ai generated" } });
     expect(definition.structuredContent).toEqual({ result: await backend.lookupTagDefinition.mock.results[0]!.value });
     expect(backend.lookupTagDefinition).toHaveBeenCalledWith("ai generated");
+
+    const translations = await client.callTool({
+      name: "eh_search_translated_tags",
+      arguments: { query: "3P", limit: 10 },
+    });
+    expect(translations.structuredContent).toEqual({ result: await backend.searchTranslatedTags.mock.results[0]!.value });
+    expect(backend.searchTranslatedTags).toHaveBeenCalledWith("3P", 10);
   });
 
   it("derives ExHentai site selection from a supplied URL", async () => {

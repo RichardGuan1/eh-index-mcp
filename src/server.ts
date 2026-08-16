@@ -29,6 +29,7 @@ export interface EhBackend {
   getFavoriteDetail(ref: GalleryRef, site?: EhSite): ReturnType<EhClient["getFavoriteDetail"]>;
   getArchiveOptions(ref: GalleryRef, site?: EhSite): ReturnType<EhClient["getArchiveOptions"]>;
   lookupTagDefinition(tag: string): ReturnType<EhClient["lookupTagDefinition"]>;
+  searchTranslatedTags(query: string, limit?: number): ReturnType<EhClient["searchTranslatedTags"]>;
 }
 
 const siteSchema = z.enum(["e-hentai", "exhentai"]);
@@ -148,6 +149,23 @@ const tagDefinitionOutputSchema = z.object({ result: z.object({
   notes: z.string().nullable(),
   sourceUrl: z.string().url(),
   untrusted: z.literal(true),
+}) });
+const translatedTagsOutputSchema = z.object({ result: z.object({
+  source: z.object({
+    repository: z.literal("https://github.com/EhTagTranslation/Database"),
+    revision: z.string().regex(/^[0-9a-f]{40}$/i),
+    version: z.number().int().positive(),
+    license: z.literal("CC BY-NC-SA 3.0 CN"),
+  }),
+  untrusted: z.literal(true),
+  matches: z.array(z.object({
+    namespace: z.string(),
+    tag: z.string(),
+    translatedName: z.string(),
+    intro: z.string(),
+    searchQuery: z.string(),
+    match: z.enum(["name-exact", "tag-exact", "name-contains", "tag-contains"]),
+  })),
 }) });
 const accessOutputSchema = z.object({ result: z.object({
   site: siteSchema,
@@ -685,6 +703,27 @@ export function createServer(backend: EhBackend): McpServer {
     async ({ tag }) => {
       try {
         return success("result", await backend.lookupTagDefinition(tag));
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "eh_search_translated_tags",
+    {
+      title: "Search translated E-Hentai tags",
+      description: "Resolve a Chinese translated tag name or original English tag through the official EhTagTranslation database. Returns all matching candidates and native searchQuery fragments without choosing between ambiguous tags. Translation data remains subject to the source database license.",
+      inputSchema: z.object({
+        query: z.string().min(1).max(100).regex(/^[^\x00-\x1f\x7f]+$/, "Query must contain printable characters"),
+        limit: z.number().int().min(1).max(50).default(20),
+      }),
+      outputSchema: translatedTagsOutputSchema,
+      annotations,
+    },
+    async ({ query, limit }) => {
+      try {
+        return success("result", await backend.searchTranslatedTags(query, limit));
       } catch (error) {
         return toolError(error);
       }

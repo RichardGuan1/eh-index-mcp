@@ -25,11 +25,18 @@ import type {
   PageRef,
   SearchOptions,
   TagDefinitionResult,
+  TagTranslationDatabase,
+  TagTranslationSearchResult,
 } from "./types.js";
 import { apiUrl, buildFavoritesUrl, buildHashSearchUrl, buildSearchUrl, galleryTorrentsUrl, galleryUrl, pageUrl } from "./urls.js";
 import { assertNotChallengePage, parseArchiveOptions, parseFavoriteCategories, parseFavoriteDetail, parseGalleryComments, parseGalleryDetail, parseGalleryList, parseGalleryPages, parseImagePage, parseTagDefinition, parseTorrents } from "./parsers.js";
 import { SerialRateLimiter } from "./rate-limiter.js";
 import { AsyncTtlCache } from "./cache.js";
+import { parseTagTranslationDatabase, searchTranslatedTags } from "./tag-translations.js";
+
+const TAG_TRANSLATION_DATABASE_URL = "https://raw.githubusercontent.com/EhTagTranslation/Database/release/db.text.json";
+const TAG_TRANSLATION_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
+const TAG_TRANSLATION_MAX_BYTES = 8 * 1024 * 1024;
 
 export interface EhClientOptions {
   fetch?: typeof fetch;
@@ -92,6 +99,37 @@ function sleepWithSignal(milliseconds: number, signal: AbortSignal): Promise<voi
     }, milliseconds);
     signal.addEventListener("abort", onAbort, { once: true });
   });
+}
+
+async function readTextWithLimit(response: Response, maxBytes: number, label: string): Promise<string> {
+  const contentLengthHeader = response.headers.get("content-length");
+  if (contentLengthHeader !== null) {
+    const contentLength = Number(contentLengthHeader);
+    if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+      throw new Error(`${label} exceeds 8 MiB`);
+    }
+  }
+  if (!response.body) return "";
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let totalBytes = 0;
+  let text = "";
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        throw new Error(`${label} exceeds 8 MiB`);
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    return text + decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 function isLoginPage(html: string): boolean {
@@ -442,6 +480,31 @@ export class EhClient {
       const response = await this.#request(url, "e-hentai");
       return parseTagDefinition(await response.text(), url);
     }));
+  }
+
+  async searchTranslatedTags(query: string, limit = 20): Promise<TagTranslationSearchResult> {
+    const database = await this.#cached<TagTranslationDatabase>(
+      "tag-translation-database",
+      TAG_TRANSLATION_CACHE_TTL_MS,
+      async () => {
+        const response = await this.#request(TAG_TRANSLATION_DATABASE_URL, "e-hentai", {
+          headers: { accept: "application/json" },
+        });
+        const text = await readTextWithLimit(
+          response,
+          TAG_TRANSLATION_MAX_BYTES,
+          "EhTagTranslation database response",
+        );
+        let value: unknown;
+        try {
+          value = JSON.parse(text);
+        } catch (error) {
+          throw new Error("EhTagTranslation database returned malformed JSON", { cause: error });
+        }
+        return parseTagTranslationDatabase(value);
+      },
+    );
+    return searchTranslatedTags(database, query, limit);
   }
 
   async checkAccess(site: EhSite = "e-hentai"): Promise<AccessDiagnostics> {
