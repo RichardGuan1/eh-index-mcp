@@ -44,6 +44,10 @@ function numberFromText(value: string, fallback = 0): number {
   return Number.isFinite(number) ? number : fallback;
 }
 
+function isNotNull<T>(value: T | null): value is T {
+  return value !== null;
+}
+
 function textValue($: CheerioAPI, selector: string): string | null {
   const value = $(selector).first().text().replace(/\u00a0/g, " ").trim();
   return value || null;
@@ -112,6 +116,35 @@ export function parseGalleryList(html: string): GalleryListResult {
 export function parseFavoriteCategories(html: string): FavoriteCategoriesResult {
   assertNotChallengePage(html);
   const $ = load(html);
+  const panels = $("div.fp[onclick*='favcat=']");
+  if (panels.length > 0) {
+    const categories = panels.map((_, panel) => {
+      const node = $(panel);
+      const value = node.attr("onclick")?.match(/[?&]favcat=(\d)(?=['"&]|$)/)?.[1];
+      if (!value) return null;
+      const children = node.children("div");
+      return {
+        index: Number(value),
+        name: children.eq(2).text().trim(),
+        count: numberFromText(children.eq(0).text()),
+      };
+    }).get().filter((category): category is { index: number; name: string; count: number } => category !== null)
+      .sort((left, right) => left.index - right.index);
+    const indexes = new Set(categories.map((category) => category.index));
+    if (panels.length !== 10 || categories.length !== 10 || indexes.size !== 10 || categories.some((category, index) => category.index !== index || !category.name)) {
+      throw new Error(`Expected 10 favorite categories, received ${categories.length}`);
+    }
+    const selectedPanels = panels.filter(".fps");
+    if (selectedPanels.length > 1) throw new Error("E-Hentai favorites page returned multiple selected favorite categories");
+    const selectedMatch = selectedPanels.first().attr("onclick")?.match(/[?&]favcat=(\d)(?=['"&]|$)/)?.[1];
+    if (selectedPanels.length === 1 && !selectedMatch) throw new Error("E-Hentai favorites page returned an invalid selected favorite category");
+    return {
+      total: categories.reduce((sum, category) => sum + category.count, 0),
+      selected: selectedPanels.length === 0 ? "all" : Number(selectedMatch),
+      categories,
+    };
+  }
+
   const links = $("a[href*='favorites.php?favcat=']");
   const categories = links.map((_, link) => {
     const node = $(link);
@@ -170,8 +203,9 @@ export function parseTagDefinition(html: string, sourceUrl: string): TagDefiniti
 export function parseArchiveOptions(html: string): ArchiveOptionsResult {
   assertNotChallengePage(html);
   const $ = load(html);
-  const balanceMatch = $("body").text().replace(/\s+/g, " ").match(/(?:GP Balance|Available Funds):\s*([\d,]+\s*(?:GP|Credits?))/i);
-  const options = $("input[type='radio'][name='dltype']").map((_, input) => {
+  const bodyText = $("body").text().replace(/\s+/g, " ");
+  const balanceMatch = bodyText.match(/(?:GP Balance|Available Funds|Current Funds):\s*([\d,]+\s*(?:GP|Credits?))/i);
+  const legacyOptions = $("input[type='radio'][name='dltype']").map((_, input) => {
     const row = $(input).closest("tr");
     const text = row.find("td").map((__, cell) => $(cell).text().trim()).get().join(" ").replace(/\s+/g, " ").trim();
     const value = $(input).attr("value") ?? "";
@@ -180,11 +214,36 @@ export function parseArchiveOptions(html: string): ArchiveOptionsResult {
         : "original" as const;
     const resolution = kind === "original" || /\boriginal\b/i.test(`${value} ${text}`)
       ? "original"
-      : text.match(/(780|800|980|1280|1600|2400)x/i)?.[0] ?? "resampled";
+      : text.match(/\b\d{3,4}\s*x\b/i)?.[0]?.replace(/\s+/g, "") ?? "resampled";
     const size = text.match(/[\d,.]+\s*(?:KiB|MiB|GiB)/i)?.[0] ?? "";
     const cost = text.match(/[\d,]+\s*(?:GP|Credits?)|\bFree\b/i)?.[0] ?? "";
     return { kind, resolution, size, cost };
   }).get();
+
+  const archiveOptions = $("form:has(input[type='hidden'][name='dltype'])").map((_, form) => {
+    const node = $(form);
+    const value = node.find("input[type='hidden'][name='dltype']").attr("value") ?? "";
+    const kind = /^org/i.test(value) ? "original" as const : /^res/i.test(value) ? "resample" as const : null;
+    if (!kind) return null;
+    const text = node.parent().text().replace(/\s+/g, " ").trim();
+    const size = text.match(/[\d,.]+\s*(?:KiB|MiB|GiB)/i)?.[0];
+    const cost = text.match(/[\d,]+\s*(?:GP|Credits?)|\bFree\b/i)?.[0];
+    if (!size || !cost) return null;
+    return { kind, resolution: kind === "original" ? "original" : "resampled", size, cost };
+  }).get().filter(isNotNull);
+
+  const hathOptions = $("#hathdl_form").parent().find("table td").map((_, cell) => {
+    const text = $(cell).text().replace(/\s+/g, " ").trim();
+    const size = text.match(/[\d,.]+\s*(?:KiB|MiB|GiB)/i)?.[0];
+    const cost = text.match(/[\d,]+\s*(?:GP|Credits?)|\bFree\b/i)?.[0];
+    const resolution = /\boriginal\b/i.test(text)
+      ? "original"
+      : text.match(/\b\d{3,4}\s*x\b/i)?.[0]?.replace(/\s+/g, "");
+    if (!size || !cost || !resolution) return null;
+    return { kind: "hath" as const, resolution, size, cost };
+  }).get().filter(isNotNull);
+
+  const options = [...legacyOptions, ...archiveOptions, ...hathOptions];
   if (options.length === 0) throw new Error("E-Hentai archive page returned no available options");
   return { balance: balanceMatch?.[1] ?? null, options };
 }
@@ -205,12 +264,15 @@ export function parseFavoriteDetail(popupHtml: string, listHtml: string, ref: Ga
     }
   }).first();
   const row = rowLink.closest("tr, .gl1t");
-  const favorited = rowLink.length > 0;
+  const popupHasRemoveAction = popup("input[name='favdel'], input[value*='Remove'], input[value*='Delete'], [onclick*='favdel']").length > 0;
+  const favorited = rowLink.length > 0 || popupHasRemoveAction;
   const checked = popup("input[name='favcat']:checked").first();
   const value = checked.attr("value");
+  const labelName = popup(`label[for='${checked.attr("id")}']`).first().text().trim();
+  const panelName = checked.parent().parent().children("div").eq(2).text().trim();
   const category = favorited && value && /^\d$/.test(value) ? {
     index: Number(value),
-    name: popup(`label[for='${checked.attr("id")}']`).first().text().trim() || `Favorites ${value}`,
+    name: labelName || panelName || `Favorites ${value}`,
   } : null;
   const favoritedAt = row.find(".glfav").first().text().trim() || null;
   const listNote = row.find(`#favnote_${ref.gid}`).first().text().replace(/^Note:\s*/i, "").trim();

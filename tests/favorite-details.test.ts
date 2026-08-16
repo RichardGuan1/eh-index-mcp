@@ -18,6 +18,27 @@ describe("favorite metadata", () => {
     });
   });
 
+  it("parses the current div-based favorite category navigation", () => {
+    const render = (selected: number | "all") => `<div class="ido">${Array.from({ length: 10 }, (_, index) => `
+      <div class="nosel">
+        <div class="fp${selected === index ? " fps" : ""}" onclick="document.location='https://e-hentai.org/favorites.php?favcat=${index}'">
+          <div>${index === 0 ? "2" : "0"}</div>
+          <div class="i"></div>
+          <div>Favorites ${index}</div>
+        </div>
+      </div>`).join("")}</div>`;
+
+    const categories = Array.from({ length: 10 }, (_, index) => ({
+      index,
+      name: `Favorites ${index}`,
+      count: index === 0 ? 2 : 0,
+    }));
+    expect(parseFavoriteCategories(render("all"))).toEqual({ total: 2, selected: "all", categories });
+    expect(parseFavoriteCategories(render(0))).toEqual({ total: 2, selected: 0, categories });
+    expect(() => parseFavoriteCategories(`${render("all")}<div class="fp fps" onclick="document.location='?favcat=all'"></div>`))
+      .toThrow("Expected 10 favorite categories");
+  });
+
   it("rejects a category menu without a selected category marker", async () => {
     const html = (await fixture()).replace(
       '<div><a href="/favorites.php?favcat=0">',
@@ -71,6 +92,28 @@ describe("favorite metadata", () => {
       category: { index: 2, name: "Art" },
       note: "Excellent & complete",
       favoritedAt: "2026-08-15 08:30",
+    });
+  });
+
+  it("recognizes a current popup's explicit remove action as existing favorite state", () => {
+    const popup = `<form>
+      <div>
+        <div><input type="radio" name="favcat" value="0" id="fav0" checked></div>
+        <div class="i"></div>
+        <div>Research</div>
+        <div class="c"></div>
+      </div>
+      <textarea name="favnote">Current note</textarea>
+      <div onclick="return favdel()">Remove from Favorites</div>
+    </form>`;
+    const emptyFavorites = "<html><body><p>No hits found</p></body></html>";
+
+    expect(parseFavoriteDetail(popup, emptyFavorites, { gid: 123, token: "123456789a" })).toEqual({
+      gallery: { gid: 123, token: "123456789a" },
+      favorited: true,
+      category: { index: 0, name: "Research" },
+      note: "Current note",
+      favoritedAt: null,
     });
   });
 

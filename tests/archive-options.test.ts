@@ -19,6 +19,41 @@ describe("archive options", () => {
     expect(JSON.stringify(result)).not.toContain("secret-archive-key");
   });
 
+  it("parses the current form-based archive and H@H choices", () => {
+    const html = `<html><body><div id="db">
+      <p>Current Funds:</p><p>1,234 GP</p>
+      <div><div>
+        <div><div>Download Cost: 916 GP</div>
+          <form><input type="hidden" name="dltype" value="org"><input type="submit" value="Download Original Archive"></form>
+          <p>Estimated Size: 43.67 MiB</p>
+        </div>
+        <div><div>Download Cost: 120 GP</div>
+          <form><input type="hidden" name="dltype" value="res"><input type="submit" value="Download Resample Archive"></form>
+          <p>Estimated Size: 5.68 MiB</p>
+        </div>
+      </div></div>
+      <div><p>H@H Downloader</p><form id="hathdl_form"><input type="hidden" name="hathdl_xres"></form>
+        <table><tr>
+          <td>Original 43.67 MiB 916 GP</td>
+          <td>800x 2.76 MiB 58 GP</td>
+          <td>1280x 5.68 MiB 120 GP</td>
+          <td>2400x N/A N/A</td>
+        </tr></table>
+      </div>
+    </div></body></html>`;
+
+    expect(parseArchiveOptions(html)).toEqual({
+      balance: "1,234 GP",
+      options: [
+        { kind: "original", resolution: "original", size: "43.67 MiB", cost: "916 GP" },
+        { kind: "resample", resolution: "resampled", size: "5.68 MiB", cost: "120 GP" },
+        { kind: "hath", resolution: "original", size: "43.67 MiB", cost: "916 GP" },
+        { kind: "hath", resolution: "800x", size: "2.76 MiB", cost: "58 GP" },
+        { kind: "hath", resolution: "1280x", size: "5.68 MiB", cost: "120 GP" },
+      ],
+    });
+  });
+
   it("preserves a free archive cost", () => {
     const html = `<html><body>
       <div>GP Balance: 12,345 GP</div>
