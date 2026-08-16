@@ -21,6 +21,10 @@ export function assertNotChallengePage(html: string): void {
   if (/Just a moment|challenge-platform|cf-chl-|cf_chl_/i.test(html)) {
     throw new Error("E-Hentai returned a Cloudflare challenge page; refresh the browser session or EH_CF_CLEARANCE cookie");
   }
+  const banMatch = html.match(/Your IP address has been temporarily banned for excessive pageloads[\s\S]*?The ban expires in\s+([^<\r\n]+)/i);
+  if (banMatch) {
+    throw new Error(`E-Hentai IP temporarily banned for ${banMatch[1]!.trim()}; stop requests until the ban expires`);
+  }
 }
 
 function cursorFromHref(href: string | undefined, key: "prev" | "next"): string | null {
@@ -75,8 +79,8 @@ function parseGalleryRow($: CheerioAPI, element: unknown): GallerySummary | null
     return null;
   }
 
-  const pagesMatch = row.find(".glhide, .gl4c, .gl3e, .gl5t").text().match(/(\d+)\s+pages?/i);
-  const thumbnail = row.find(".glthumb [data-src], .glthumb img[src]").first();
+  const pagesMatch = row.find(".glhide, .gl2m, .gl2c, .gl4c, .gl3e, .gl5t").text().match(/(\d+)\s+pages?/i);
+  const thumbnail = row.find(".glthumb [data-src], .glthumb img[src], .gl1e img[data-src], .gl1e img[src], .gl3t img[data-src], .gl3t img[src]").first();
   const thumbnailUrl = thumbnail.attr("data-src") ?? thumbnail.attr("src") ?? null;
   const title = row.find(".glink").first().text().trim();
   if (!title) return null;
@@ -407,9 +411,17 @@ function absoluteUrl(value: string | undefined): string | null {
 
 export function parseImagePage(html: string): ImagePageResult {
   assertNotChallengePage(html);
+  if (/You have (?:exceeded|reached) (?:your |the )?image viewing limits|image limit has been reached/i.test(html)
+    || /image limit[\s\S]*(?:insufficient GP|do not have sufficient GP|requires GP|do not have enough)/i.test(html)) {
+    throw new Error("E-Hentai image quota exhausted; stop image requests and wait for quota recovery");
+  }
   const $ = load(html);
   const imageUrl = $("#img").attr("src") ?? $("#i3 img").attr("src");
   if (!imageUrl) throw new Error("Could not find an image URL on the E-Hentai page");
+  const resolvedImageUrl = absoluteUrl(imageUrl)!;
+  if (/\/(?:g|img)\/509s?\.gif$/i.test(new URL(resolvedImageUrl).pathname)) {
+    throw new Error("E-Hentai image quota exhausted; stop image requests and wait for quota recovery");
+  }
 
   const previousPageUrl = absoluteUrl($("a#prev[href*='/s/']").first().attr("href"));
   const nextPageUrl = absoluteUrl($("a#next[href*='/s/']").first().attr("href"));

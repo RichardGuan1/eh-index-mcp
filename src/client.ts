@@ -52,8 +52,10 @@ export interface EhClientOptions {
 
 class HttpStatusError extends Error {
   constructor(readonly status: number, readonly statusText: string) {
-    const detail = status === 429
-      ? "rate limited; retry later or reduce request frequency"
+    const detail = status === 509
+      ? "image quota exhausted; stop image requests and wait for quota recovery"
+      : status === 429
+        ? "rate limited; retry later or reduce request frequency"
       : status === 503
         ? "service unavailable or IP-level rate limit; retry later"
         : status === 401

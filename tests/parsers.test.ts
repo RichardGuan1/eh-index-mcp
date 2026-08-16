@@ -10,6 +10,11 @@ describe("HTML parsers", () => {
     expect(() => parseGalleryList(challenge)).toThrow("Cloudflare challenge");
   });
 
+  it("rejects an IP-ban page and preserves the reported remaining time", () => {
+    const banned = "Your IP address has been temporarily banned for excessive pageloads which indicates that you are using automated mirroring/harvesting software. The ban expires in 59 minutes and 48 seconds";
+    expect(() => parseGalleryList(banned)).toThrow("IP temporarily banned for 59 minutes and 48 seconds");
+  });
+
   it("returns an empty list for a normal no-hits page", () => {
     expect(parseGalleryList('<html><p>No hits found</p></html>')).toEqual({
       galleries: [],
@@ -46,6 +51,21 @@ describe("HTML parsers", () => {
         thumbnailUrl: "https://ehgt.org/ab/cd/thumb-250.jpg",
       }),
     ]);
+  });
+
+  it("rejects a 509 placeholder image returned with HTTP 200", () => {
+    const html = '<div id="i3"><img id="img" src="https://ehgt.org/g/509.gif"></div>';
+    expect(() => parseImagePage(html)).toThrow("image quota exhausted");
+  });
+
+  it("rejects a textual image-limit response returned with HTTP 200", () => {
+    expect(() => parseImagePage("You have exceeded your image viewing limits"))
+      .toThrow("image quota exhausted");
+  });
+
+  it("rejects an insufficient-GP image-limit response returned with HTTP 200", () => {
+    expect(() => parseImagePage("You have reached the image limit, and do not have sufficient GP to buy a download quota."))
+      .toThrow("image quota exhausted");
   });
 
   it("parses current image, original image, show key, and next page", async () => {

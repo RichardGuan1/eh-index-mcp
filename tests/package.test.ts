@@ -23,6 +23,8 @@ describe("package layout", () => {
     expect(packageJson.homepage).toBe("https://github.com/RichardGuan1/eh-index-mcp#readme");
     expect(packageJson.bugs).toEqual({ url: "https://github.com/RichardGuan1/eh-index-mcp/issues" });
     expect(packageJson.publishConfig).toEqual({ access: "public" });
+    expect(packageJson.scripts["smoke:auth"]).toBe("npm run build && node scripts/auth-smoke.mjs");
+    expect(packageJson.files).not.toContain("scripts");
     expect(packageJson.keywords).toEqual(expect.arrayContaining([
       "mcp",
       "model-context-protocol",

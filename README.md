@@ -111,9 +111,13 @@ npm install
 npm run build
 npm run check
 npm run smoke
+# Optional authenticated read-only check:
+npm run smoke:auth
 ```
 
 `npm run smoke` starts the built stdio server through a real MCP client, selects a current gallery from the live popular list, and performs a small public check. It also verifies stable fields from a known EHWiki tag definition so parser regressions cannot pass on a non-empty response alone. It does not download gallery images or torrent files.
+
+`npm run smoke:auth` first rebuilds the server, then performs a manual authenticated read-only check using `EH_MEMBER_ID`, `EH_PASS_HASH`, and optional `EH_IGNEOUS` values already present in the environment. It verifies authenticated access, favorite categories, one existing favorite, and archive option metadata without changing favorites, purchasing archives, or downloading content. Its output contains only booleans, counts, and archive kinds; it does not print credentials, gallery identifiers, titles, category names, or notes. This check is not run by `npm run check` and requires an account with at least one favorite.
 
 ## Project links
 

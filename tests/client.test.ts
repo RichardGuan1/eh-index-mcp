@@ -40,6 +40,13 @@ describe("EhClient", () => {
       .rejects.toThrow("Cloudflare challenge");
   });
 
+  it("reports HTTP 509 as exhausted image quota", async () => {
+    const fetchMock = vi.fn(async () => new Response("Bandwidth exceeded", { status: 509 }));
+    const client = new EhClient({ fetch: fetchMock as typeof fetch, maxRetries: 0 });
+
+    await expect(client.popular()).rejects.toThrow("image quota exhausted");
+  });
+
   it("aborts requests after the configured timeout", async () => {
     const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       await new Promise((_, reject) => {
