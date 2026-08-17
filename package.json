@@ -29,7 +29,10 @@
     "eh-index-mcp": "dist/index.js"
   },
   "files": [
+    "assets/demo.png",
+    "assets/eh-index-icon.png",
     "dist",
+    "README.zh-CN.md",
     "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
