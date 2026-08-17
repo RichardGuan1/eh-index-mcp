@@ -29,7 +29,7 @@ function assertResult(result, label) {
 try {
   await client.connect(transport);
   const tools = await client.listTools();
-  if (tools.tools.length !== 26) throw new Error(`Expected 26 tools, received ${tools.tools.length}`);
+  if (tools.tools.length !== 27) throw new Error(`Expected 27 tools, received ${tools.tools.length}`);
 
   const popular = assertResult(await client.callTool({
     name: "eh_get_popular",
@@ -95,6 +95,30 @@ try {
     || translatedTitleMatch?.match !== "name-exact"
   ) {
     throw new Error("Translated tag lookup did not normalize title punctuation");
+  }
+
+  const workSearch = assertResult(await client.callTool({
+    name: "eh_search_gallery_works",
+    arguments: {
+      query: 'parody:"kimi no na wa."$ ~male:netorare$ ~female:netorare$ -other:"ai generated"$',
+      maxPages: 2,
+    },
+  }), "gallery work search");
+  const organizedVariants = workSearch.result?.series?.flatMap((series) =>
+    series.works?.flatMap((work) => work.variants ?? []) ?? []) ?? [];
+  const dominantSeries = workSearch.result?.series?.find((series) =>
+    series.works?.length >= 10
+    && series.works.every((work) => work.groupingConfidence === "high"));
+  if (
+    workSearch.result?.pagesScanned !== 2
+    || workSearch.result?.galleryCount < 2
+    || workSearch.result?.uniqueWorkCount < 1
+    || workSearch.result?.uniqueWorkCount >= workSearch.result?.galleryCount
+    || workSearch.result?.seriesCount < 1
+    || organizedVariants.length !== workSearch.result?.galleryCount
+    || !dominantSeries
+  ) {
+    throw new Error("Gallery work search did not organize repeated uploads and installments");
   }
 
   const tagDefinition = assertResult(await client.callTool({
@@ -225,6 +249,10 @@ try {
     translatedTagCount: translatedTags.result.matches.length,
     translatedTag: translatedTag.tag,
     normalizedTitleTag: translatedTitleMatch.tag,
+    workSearchPages: workSearch.result.pagesScanned,
+    workSearchGalleryCount: workSearch.result.galleryCount,
+    workSearchUniqueCount: workSearch.result.uniqueWorkCount,
+    workSearchSeriesCount: workSearch.result.seriesCount,
     tagDefinitionTitle: tagDefinition.result.title,
     detailTagGroups: detail.result.tagGroups.length,
     torrentCount,

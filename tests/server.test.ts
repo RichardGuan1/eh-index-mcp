@@ -46,6 +46,7 @@ describe("MCP server", () => {
       "eh_search_by_hash",
       "eh_search_favorites",
       "eh_search_galleries",
+      "eh_search_gallery_works",
       "eh_search_translated_tags",
     ]);
     expect(tools.tools.every((tool) => tool.annotations?.readOnlyHint === true)).toBe(true);
@@ -157,6 +158,45 @@ describe("MCP server", () => {
     });
     expect(translations.structuredContent).toEqual({ result: await backend.searchTranslatedTags.mock.results[0]!.value });
     expect(backend.searchTranslatedTags).toHaveBeenCalledWith("3P", 10);
+  });
+
+  it("routes organized multi-page gallery work searches", async () => {
+    const result = {
+      pagesScanned: 2,
+      searchedGalleryCount: 3,
+      galleryCount: 2,
+      uniqueWorkCount: 1,
+      seriesCount: 1,
+      truncated: true,
+      next: "cursor-3",
+      series: [{
+        key: "series",
+        title: "Mitsuha ~Netorare",
+        creators: ["group:syukurin"],
+        works: [{
+          key: "work",
+          title: "Mitsuha ~Netorare 10~",
+          installment: "10",
+          creators: ["group:syukurin"],
+          availableLanguages: ["chinese"],
+          groupingConfidence: "high" as const,
+          preferredGallery: { gid: 1, token: "123456789a", url: "https://e-hentai.org/g/1/123456789a/", title: "Title", titleJpn: null, category: "Doujinshi", posted: null, pages: 50, rating: 4.5, languages: [] },
+          variants: [],
+        }],
+      }],
+    };
+    const backend = { searchGalleryWorks: vi.fn(async () => result) };
+    const server = createServer(backend as never);
+    const client = new Client({ name: "test-client", version: "1.0.0" });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeables.push(client, server);
+
+    const response = await client.callTool({ name: "eh_search_gallery_works", arguments: { query: "test", maxPages: 2 } });
+
+    expect(response.structuredContent).toEqual({ result });
+    expect(backend.searchGalleryWorks).toHaveBeenCalledWith(expect.objectContaining({ site: "e-hentai", query: "test", maxPages: 2 }));
   });
 
   it("derives ExHentai site selection from a supplied URL", async () => {

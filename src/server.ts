@@ -11,6 +11,7 @@ export interface EhBackend {
   searchByHash(sha1: string, site?: EhSite): ReturnType<EhClient["searchByHash"]>;
   searchByFile(path: string, site?: EhSite): ReturnType<EhClient["searchByFile"]>;
   search(options: SearchOptions): ReturnType<EhClient["search"]>;
+  searchGalleryWorks(options: Parameters<EhClient["searchGalleryWorks"]>[0]): ReturnType<EhClient["searchGalleryWorks"]>;
   popular(site?: EhSite): ReturnType<EhClient["popular"]>;
   searchFavorites(options: FavoritesOptions): ReturnType<EhClient["searchFavorites"]>;
   getGalleryPages(ref: GalleryRef, site?: EhSite, previewPage?: number): ReturnType<EhClient["getGalleryPages"]>;
@@ -108,6 +109,41 @@ const imagePageSchema = z.object({
   previousPageUrl: z.string().url().nullable(),
 });
 const galleryListOutputSchema = z.object({ result: galleryListSchema });
+const workVariantSchema = gallerySchema.extend({
+  url: z.string().url(),
+  title: z.string(),
+  titleJpn: z.string().nullable(),
+  category: z.string().nullable(),
+  posted: z.string().nullable(),
+  pages: z.number().int().nullable(),
+  rating: z.number().nullable(),
+  languages: z.array(z.string()),
+});
+const workSchema = z.object({
+  key: z.string(),
+  title: z.string(),
+  installment: z.string().nullable(),
+  creators: z.array(z.string()),
+  availableLanguages: z.array(z.string()),
+  groupingConfidence: z.enum(["high", "medium", "low"]),
+  preferredGallery: workVariantSchema,
+  variants: z.array(workVariantSchema),
+});
+const galleryWorkSearchOutputSchema = z.object({ result: z.object({
+  pagesScanned: z.number().int().positive(),
+  searchedGalleryCount: z.number().int().nonnegative(),
+  galleryCount: z.number().int().nonnegative(),
+  uniqueWorkCount: z.number().int().nonnegative(),
+  seriesCount: z.number().int().nonnegative(),
+  truncated: z.boolean(),
+  next: z.string().nullable(),
+  series: z.array(z.object({
+    key: z.string(),
+    title: z.string(),
+    creators: z.array(z.string()),
+    works: z.array(workSchema),
+  })),
+}) });
 const metadataOutputSchema = z.object({ galleries: z.array(galleryMetadataSchema) });
 const galleryPagesOutputSchema = z.object({ result: galleryPagesSchema });
 const imagePageOutputSchema = z.object({ result: imagePageSchema });
@@ -215,6 +251,19 @@ const annotations = {
   idempotentHint: true,
   openWorldHint: true,
 };
+const searchInputShape = {
+  site: siteSchema.default("e-hentai"),
+  query: z.string().max(200).optional().describe("Native E-Hentai query, e.g. language:chinese$ artist:name$"),
+  categories: z.array(z.enum(["misc", "doujinshi", "manga", "artist-cg", "game-cg", "western", "non-h", "image-set", "cosplay", "asian-porn"])).max(10).optional(),
+  minRating: z.number().int().min(2).max(5).optional(),
+  pageFrom: z.number().int().positive().optional(),
+  pageTo: z.number().int().positive().optional(),
+  hasTorrent: z.boolean().optional(),
+  browseExpunged: z.boolean().optional(),
+  disableLanguageFilter: z.boolean().optional(),
+  disableUploaderFilter: z.boolean().optional(),
+  disableTagFilter: z.boolean().optional(),
+};
 
 function success(key: string, value: unknown) {
   const structuredContent = { [key]: value };
@@ -238,17 +287,7 @@ export function createServer(backend: EhBackend): McpServer {
       title: "Search E-Hentai galleries",
       description: "Search E-Hentai or ExHentai with native tag/title syntax and optional category, rating, page-count, torrent, expunged, and cursor filters.",
       inputSchema: z.object({
-        site: siteSchema.default("e-hentai"),
-        query: z.string().max(200).optional().describe("Native E-Hentai query, e.g. language:chinese$ artist:name$"),
-        categories: z.array(z.enum(["misc", "doujinshi", "manga", "artist-cg", "game-cg", "western", "non-h", "image-set", "cosplay", "asian-porn"])).max(10).optional(),
-        minRating: z.number().int().min(2).max(5).optional(),
-        pageFrom: z.number().int().positive().optional(),
-        pageTo: z.number().int().positive().optional(),
-        hasTorrent: z.boolean().optional(),
-        browseExpunged: z.boolean().optional(),
-        disableLanguageFilter: z.boolean().optional(),
-        disableUploaderFilter: z.boolean().optional(),
-        disableTagFilter: z.boolean().optional(),
+        ...searchInputShape,
         prev: z.string().optional().describe("Previous-page cursor returned by this tool"),
         next: z.string().optional().describe("Next-page cursor returned by this tool"),
         seek: z.string().optional().describe("E-Hentai seek value, such as a date or gallery ID"),
@@ -259,6 +298,28 @@ export function createServer(backend: EhBackend): McpServer {
     async (input) => {
       try {
         return success("result", await backend.search(input));
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "eh_search_gallery_works",
+    {
+      title: "Search and organize gallery works",
+      description: "Search up to 10 result pages, fetch official metadata, merge official version links and likely language/upload variants into works, then group installments into series. galleryCount counts unique gallery uploads; uniqueWorkCount is heuristic and every work includes a confidence level plus all source galleries.",
+      inputSchema: z.object({
+        ...searchInputShape,
+        maxPages: z.number().int().min(1).max(10).default(5).describe("Maximum result pages to scan; each page consumes one rate-limited search request"),
+        next: z.string().optional().describe("Resume cursor returned by a previous truncated work search"),
+      }),
+      outputSchema: galleryWorkSearchOutputSchema,
+      annotations,
+    },
+    async (input) => {
+      try {
+        return success("result", await backend.searchGalleryWorks(input));
       } catch (error) {
         return toolError(error);
       }

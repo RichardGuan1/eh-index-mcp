@@ -310,3 +310,51 @@ export interface GalleryVersionComparison {
     tagsRemoved: string[];
   };
 }
+
+export interface GalleryWorkVariant extends GalleryRef {
+  url: string;
+  title: string;
+  titleJpn: string | null;
+  category: string | null;
+  posted: string | null;
+  pages: number | null;
+  rating: number | null;
+  languages: string[];
+}
+
+export interface GalleryWork {
+  key: string;
+  title: string;
+  installment: string | null;
+  creators: string[];
+  availableLanguages: string[];
+  groupingConfidence: "high" | "medium" | "low";
+  preferredGallery: GalleryWorkVariant;
+  variants: GalleryWorkVariant[];
+}
+
+export interface GalleryWorkSeries {
+  key: string;
+  title: string;
+  creators: string[];
+  works: GalleryWork[];
+}
+
+export interface GalleryWorkOrganization {
+  galleryCount: number;
+  uniqueWorkCount: number;
+  seriesCount: number;
+  series: GalleryWorkSeries[];
+}
+
+export interface GalleryWorkSearchOptions extends Omit<SearchOptions, "prev" | "next" | "seek"> {
+  maxPages?: number;
+  next?: string;
+}
+
+export interface GalleryWorkSearchResult extends GalleryWorkOrganization {
+  pagesScanned: number;
+  searchedGalleryCount: number;
+  truncated: boolean;
+  next: string | null;
+}

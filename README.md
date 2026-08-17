@@ -1,6 +1,6 @@
 # EH Index MCP
 
-A read-only local MCP server for E-Hentai and ExHentai. It exposes gallery, SHA-1, and local-file search; structured query building; Chinese tag resolution through EhTagTranslation; popular galleries; official metadata and token resolution with automatic batching; comments; detailed gallery information; version comparison; full gallery-page enumeration; image-page resolution; torrent metadata; EHWiki tag definitions; access diagnostics; and authenticated favorite and archive metadata.
+A read-only local MCP server for E-Hentai and ExHentai. It exposes gallery, SHA-1, and local-file search; multi-page work and series organization; structured query building; Chinese tag resolution through EhTagTranslation; popular galleries; official metadata and token resolution with automatic batching; comments; detailed gallery information; version comparison; full gallery-page enumeration; image-page resolution; torrent metadata; EHWiki tag definitions; access diagnostics; and authenticated favorite and archive metadata.
 
 ## Requirements
 
@@ -75,6 +75,7 @@ All values must be non-negative integers. Increasing request rates can trigger E
 ## Tools
 
 - `eh_search_galleries`: Native E-Hentai search syntax, categories, rating, page range, torrents, expunged galleries, and cursor pagination.
+- `eh_search_gallery_works`: Scan up to 10 search pages, deduplicate repeated gallery uploads, merge official version links and likely language/upload variants into independent works, and group numbered installments into series. `galleryCount` counts unique gallery uploads; `uniqueWorkCount` is a heuristic estimate. Every work returns a confidence level and retains all source galleries. Use `next` to resume when `truncated` is true.
 - `eh_search_by_hash`: Exact SHA-1 image search without uploading an image.
 - `eh_search_by_file`: Calculate SHA-1 for one explicitly provided absolute local file and search it without uploading the file. Directories, wildcards, relative paths, and oversized files are rejected.
 - `eh_build_search_query`: Build and validate native include, exclude, OR, exact-tag, and title search syntax.
@@ -116,7 +117,7 @@ npm run smoke
 npm run smoke:auth
 ```
 
-`npm run smoke` starts the built stdio server through a real MCP client, selects a current gallery from the live popular list, and performs a small public check. It also verifies stable fields from a known EHWiki tag definition and resolves a known Chinese tag through the live EhTagTranslation release, so parser and external-data regressions cannot pass on a non-empty response alone. It does not download gallery images or torrent files.
+`npm run smoke` starts the built stdio server through a real MCP client, selects a current gallery from the live popular list, and performs a small public check. It also verifies stable fields from a known EHWiki tag definition, resolves a known Chinese tag through the live EhTagTranslation release, and scans two pages of a known series query to assert that repeated uploads are organized into fewer works and coherent installments without printing their titles. It does not download gallery images or torrent files.
 
 `npm run smoke:auth` first rebuilds the server, then performs a manual authenticated read-only check using `EH_MEMBER_ID`, `EH_PASS_HASH`, and optional `EH_IGNEOUS` values already present in the environment. It verifies authenticated access, favorite categories, one existing favorite, and archive option metadata without changing favorites, purchasing archives, or downloading content. Its output contains only booleans, counts, and archive kinds; it does not print credentials, gallery identifiers, titles, category names, or notes. This check is not run by `npm run check` and requires an account with at least one favorite.
 

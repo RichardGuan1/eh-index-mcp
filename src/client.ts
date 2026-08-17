@@ -20,6 +20,8 @@ import type {
   GalleryTorrent,
   GalleryTokenResolution,
   GalleryVersionComparison,
+  GalleryWorkSearchOptions,
+  GalleryWorkSearchResult,
   IdentityCookies,
   ImagePageResult,
   PageRef,
@@ -33,6 +35,7 @@ import { assertNotChallengePage, parseArchiveOptions, parseFavoriteCategories, p
 import { SerialRateLimiter } from "./rate-limiter.js";
 import { AsyncTtlCache } from "./cache.js";
 import { parseTagTranslationDatabase, searchTranslatedTags } from "./tag-translations.js";
+import { organizeGalleryWorks } from "./gallery-works.js";
 
 const TAG_TRANSLATION_DATABASE_URL = "https://raw.githubusercontent.com/EhTagTranslation/Database/release/db.text.json";
 const TAG_TRANSLATION_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
@@ -350,6 +353,46 @@ export class EhClient {
       const response = await this.#request(buildSearchUrl(options), site);
       return parseGalleryList(await response.text());
     }));
+  }
+
+  async searchGalleryWorks(options: GalleryWorkSearchOptions): Promise<GalleryWorkSearchResult> {
+    const maxPages = options.maxPages ?? 5;
+    if (!Number.isInteger(maxPages) || maxPages < 1 || maxPages > 10) {
+      throw new Error("maxPages must be an integer from 1 to 10");
+    }
+    const site = options.site ?? "e-hentai";
+    const { maxPages: _maxPages, next: initialNext, ...searchOptions } = options;
+    const galleries: GalleryListResult["galleries"] = [];
+    const seenCursors = new Set<string>();
+    let next = initialNext ?? null;
+    let pagesScanned = 0;
+
+    for (; pagesScanned < maxPages; pagesScanned += 1) {
+      if (next) {
+        if (seenCursors.has(next)) throw new Error(`Search cursor repeated: ${next}`);
+        seenCursors.add(next);
+      }
+      const page = await this.search({ ...searchOptions, site, ...(next ? { next } : {}) });
+      galleries.push(...page.galleries);
+      next = page.next;
+      if (!next) {
+        pagesScanned += 1;
+        break;
+      }
+    }
+
+    const refs = [...new Map(galleries.map((gallery) => [`${gallery.gid}:${gallery.token.toLowerCase()}`, {
+      gid: gallery.gid,
+      token: gallery.token,
+    }])).values()];
+    const organized = organizeGalleryWorks(await this.getGalleryMetadataBatch(refs, site), site);
+    return {
+      ...organized,
+      pagesScanned,
+      searchedGalleryCount: galleries.length,
+      truncated: next !== null,
+      next,
+    };
   }
 
   async searchByHash(sha1: string, site: EhSite = "e-hentai"): Promise<GalleryListResult> {
