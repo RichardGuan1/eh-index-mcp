@@ -70,6 +70,40 @@ describe("EhTagTranslation database", () => {
     ]);
   });
 
+  it("ignores title punctuation and spacing in translated-name lookup", () => {
+    const database = parseTagTranslationDatabase({
+      ...fixture,
+      data: [
+        ...fixture.data,
+        {
+          namespace: "parody",
+          data: {
+            "senren banka": { name: "千恋＊万花", intro: "作品标签。", links: "" },
+          },
+        },
+      ],
+    });
+
+    expect(searchTranslatedTags(database, "千恋万花", 10).matches).toEqual([
+      expect.objectContaining({
+        namespace: "parody",
+        tag: "senren banka",
+        translatedName: "千恋＊万花",
+        match: "name-exact",
+      }),
+    ]);
+    expect(searchTranslatedTags(database, "senren banka", 10).matches[0]).toEqual(
+      expect.objectContaining({ tag: "senren banka", match: "tag-exact" }),
+    );
+  });
+
+  it("rejects a query that becomes empty after punctuation normalization", () => {
+    const database = parseTagTranslationDatabase(fixture);
+
+    expect(() => searchTranslatedTags(database, "＊＊＊", 10))
+      .toThrow("must contain letters or numbers");
+  });
+
   it("rejects an incompatible upstream schema", () => {
     expect(() => parseTagTranslationDatabase({ repo: "https://example.test", data: [] }))
       .toThrow("EhTagTranslation database schema");

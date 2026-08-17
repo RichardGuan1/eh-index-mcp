@@ -83,6 +83,20 @@ try {
     throw new Error("Translated tag lookup returned unexpected source metadata or tag semantics");
   }
 
+  const translatedTitle = assertResult(await client.callTool({
+    name: "eh_search_translated_tags",
+    arguments: { query: "千恋万花", limit: 5 },
+  }), "translated title without punctuation");
+  const translatedTitleMatch = translatedTitle.result?.matches?.[0];
+  if (
+    translatedTitleMatch?.namespace !== "parody"
+    || translatedTitleMatch?.tag !== "senren banka"
+    || translatedTitleMatch?.translatedName !== "千恋＊万花"
+    || translatedTitleMatch?.match !== "name-exact"
+  ) {
+    throw new Error("Translated tag lookup did not normalize title punctuation");
+  }
+
   const tagDefinition = assertResult(await client.callTool({
     name: "eh_lookup_tag_definition",
     arguments: { tag: "ai generated" },
@@ -210,6 +224,7 @@ try {
     builtQuery: query.result.query,
     translatedTagCount: translatedTags.result.matches.length,
     translatedTag: translatedTag.tag,
+    normalizedTitleTag: translatedTitleMatch.tag,
     tagDefinitionTitle: tagDefinition.result.title,
     detailTagGroups: detail.result.tagGroups.length,
     torrentCount,

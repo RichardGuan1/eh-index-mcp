@@ -70,19 +70,25 @@ function toMatch(entry: TagTranslationDatabase["entries"][number], match: TagTra
   };
 }
 
+function normalizedLookupKey(value: string): string {
+  return value.normalize("NFKC").toLocaleLowerCase().replace(/[\p{P}\p{S}\s]+/gu, "");
+}
+
 export function searchTranslatedTags(database: TagTranslationDatabase, query: string, limit = 20): TagTranslationSearchResult {
-  const normalized = query.trim().toLocaleLowerCase();
-  if (!normalized || normalized.length > 100 || /[\x00-\x1f\x7f]/.test(normalized)) {
+  const trimmed = query.trim();
+  if (!trimmed || trimmed.length > 100 || /[\x00-\x1f\x7f]/.test(trimmed)) {
     throw new Error("Translated tag query must contain 1-100 printable characters");
   }
   if (!Number.isInteger(limit) || limit < 1 || limit > 50) {
     throw new Error("Translated tag result limit must be an integer from 1 to 50");
   }
 
-  const nameExact = database.entries.filter((entry) => entry.translatedName.toLocaleLowerCase() === normalized);
-  const tagExact = database.entries.filter((entry) => entry.tag.toLocaleLowerCase() === normalized);
-  const nameContains = database.entries.filter((entry) => entry.translatedName.toLocaleLowerCase().includes(normalized));
-  const tagContains = database.entries.filter((entry) => entry.tag.toLocaleLowerCase().includes(normalized));
+  const normalized = normalizedLookupKey(trimmed);
+  if (!normalized) throw new Error("Translated tag query must contain letters or numbers");
+  const nameExact = database.entries.filter((entry) => normalizedLookupKey(entry.translatedName) === normalized);
+  const tagExact = database.entries.filter((entry) => normalizedLookupKey(entry.tag) === normalized);
+  const nameContains = database.entries.filter((entry) => normalizedLookupKey(entry.translatedName).includes(normalized));
+  const tagContains = database.entries.filter((entry) => normalizedLookupKey(entry.tag).includes(normalized));
   const candidates = nameExact.length > 0
     ? nameExact.map((entry) => toMatch(entry, "name-exact"))
     : tagExact.length > 0
