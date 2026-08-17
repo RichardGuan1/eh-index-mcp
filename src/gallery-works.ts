@@ -5,6 +5,7 @@ import type {
   GalleryWorkOrganization,
   GalleryWorkVariant,
 } from "./types.js";
+import { extractSimilarGalleryTitle, extractTitleParts } from "./gallery-title.js";
 
 const CREATOR_NAMESPACES = new Set(["group", "artist", "cosplayer"]);
 const LANGUAGE_PREFIX = "language:";
@@ -57,14 +58,14 @@ function stripParodyQualifier(title: string, tags: string[]): string {
 }
 
 function workIdentity(title: string, tags: string[]): { baseTitle: string; installment: string | null } {
-  const translated = tags.includes("language:translated") || tags.includes("language:rewrite");
-  const identityTitle = translated ? title.split("|", 1)[0]! : title;
+  const identityTitle = title.split("|", 1)[0]!;
   const stripped = stripParodyQualifier(stripEditionSuffixes(identityTitle, tags).trim(), tags);
   const withoutCreator = stripped
     .replace(/^\s*(?:\([^()]+\)\s*)?\[[^\]]+\]\s*/u, "")
     .trim();
-  const installmentMatch = withoutCreator.match(/(?:netorare|寝取られ)[^\d]*(\d+(?:\.\d+)?(?:\s*\+\s*\d+(?:\.\d+)?)?)/iu);
-  return { baseTitle: withoutCreator, installment: installmentMatch?.[1]?.replace(/\s+/gu, "") ?? null };
+  const suffix = extractTitleParts(title).suffix;
+  const installment = suffix.match(/\d+(?:\.\d+)?(?:\s*\+\s*\d+(?:\.\d+)?)?/u)?.[0]?.replace(/\s+/gu, "") ?? null;
+  return { baseTitle: withoutCreator, installment };
 }
 
 function normalizedKey(value: string): string {
@@ -89,14 +90,7 @@ function mergeCreators(left: string[], right: string[]): string[] {
 }
 
 function seriesTitle(baseTitle: string): string {
-  const withoutPublicationPrefix = baseTitle
-    .replace(/^\s*(?:\([^()]+\)\s*)?\[[^\]]+\]\s*/u, "")
-    .trim();
-  const withoutParodySuffix = withoutPublicationPrefix.replace(/\s*\([^()]+\)\s*$/u, "").trim();
-  return withoutParodySuffix
-    .replace(/((?:netorare|寝取られ)[^\d]*)(\d+(?:\.\d+)?(?:\s*\+\s*\d+(?:\.\d+)?)?)/iu, "$1")
-    .replace(/\s*[~～]\s*$/u, "")
-    .trim();
+  return extractSimilarGalleryTitle(baseTitle) ?? baseTitle.trim();
 }
 
 function toVariant(metadata: GalleryMetadata, site: EhSite): GalleryWorkVariant {

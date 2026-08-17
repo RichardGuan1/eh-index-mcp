@@ -11,6 +11,7 @@ export interface EhBackend {
   searchByHash(sha1: string, site?: EhSite): ReturnType<EhClient["searchByHash"]>;
   searchByFile(path: string, site?: EhSite): ReturnType<EhClient["searchByFile"]>;
   search(options: SearchOptions): ReturnType<EhClient["search"]>;
+  findSimilarGalleries(ref: GalleryRef, site?: EhSite): ReturnType<EhClient["findSimilarGalleries"]>;
   searchGalleryWorks(options: Parameters<EhClient["searchGalleryWorks"]>[0]): ReturnType<EhClient["searchGalleryWorks"]>;
   popular(site?: EhSite): ReturnType<EhClient["popular"]>;
   searchFavorites(options: FavoritesOptions): ReturnType<EhClient["searchFavorites"]>;
@@ -109,6 +110,11 @@ const imagePageSchema = z.object({
   previousPageUrl: z.string().url().nullable(),
 });
 const galleryListOutputSchema = z.object({ result: galleryListSchema });
+const similarGalleryOutputSchema = z.object({ result: z.object({
+  strategy: z.enum(["title", "artist", "uploader"]),
+  query: z.string(),
+  result: galleryListSchema,
+}) });
 const workVariantSchema = gallerySchema.extend({
   url: z.string().url(),
   title: z.string(),
@@ -298,6 +304,29 @@ export function createServer(backend: EhBackend): McpServer {
     async (input) => {
       try {
         return success("result", await backend.search(input));
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "eh_find_similar_galleries",
+    {
+      title: "Find similar galleries",
+      description: "Find galleries using EhViewer's strategy: extract a structural title and run an exact quoted search, falling back to the first artist tag and then the uploader when no title remains.",
+      inputSchema: z.object({
+        site: siteSchema.default("e-hentai"),
+        gallery: gallerySchema.optional(),
+        galleryUrl: z.string().url().optional(),
+      }).refine((value) => Boolean(value.gallery) !== Boolean(value.galleryUrl), "Provide exactly one of gallery or galleryUrl"),
+      outputSchema: similarGalleryOutputSchema,
+      annotations,
+    },
+    async ({ gallery, galleryUrl, site }) => {
+      try {
+        const ref = gallery ?? parseGalleryUrl(galleryUrl!);
+        return success("result", await backend.findSimilarGalleries(ref, galleryUrl ? siteFromUrl(galleryUrl) : site));
       } catch (error) {
         return toolError(error);
       }

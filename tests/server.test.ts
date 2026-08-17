@@ -25,6 +25,7 @@ describe("MCP server", () => {
       "eh_check_access",
       "eh_compare_gallery_versions",
       "eh_find_latest_gallery_version",
+      "eh_find_similar_galleries",
       "eh_get_all_gallery_pages",
       "eh_get_archive_options",
       "eh_get_favorite_categories",
@@ -171,11 +172,11 @@ describe("MCP server", () => {
       next: "cursor-3",
       series: [{
         key: "series",
-        title: "Mitsuha ~Netorare",
+        title: "Mitsuha ~Chapter",
         creators: ["group:syukurin"],
         works: [{
           key: "work",
-          title: "Mitsuha ~Netorare 10~",
+          title: "Mitsuha ~Chapter 10~",
           installment: "10",
           creators: ["group:syukurin"],
           availableLanguages: ["chinese"],
@@ -197,6 +198,30 @@ describe("MCP server", () => {
 
     expect(response.structuredContent).toEqual({ result });
     expect(backend.searchGalleryWorks).toHaveBeenCalledWith(expect.objectContaining({ site: "e-hentai", query: "test", maxPages: 2 }));
+  });
+
+  it("routes EhViewer-compatible similar gallery searches", async () => {
+    const gallery = { gid: 123, token: "123456789a" };
+    const result = {
+      strategy: "title" as const,
+      query: '"Main Story"',
+      result: { galleries: [], prev: null, next: null },
+    };
+    const backend = { findSimilarGalleries: vi.fn(async () => result) };
+    const server = createServer(backend as never);
+    const client = new Client({ name: "test-client", version: "1.0.0" });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeables.push(client, server);
+
+    const response = await client.callTool({
+      name: "eh_find_similar_galleries",
+      arguments: { galleryUrl: "https://exhentai.org/g/123/123456789a/" },
+    });
+
+    expect(response.structuredContent).toEqual({ result });
+    expect(backend.findSimilarGalleries).toHaveBeenCalledWith(gallery, "exhentai");
   });
 
   it("derives ExHentai site selection from a supplied URL", async () => {

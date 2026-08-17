@@ -26,6 +26,7 @@ import type {
   ImagePageResult,
   PageRef,
   SearchOptions,
+  SimilarGallerySearchResult,
   TagDefinitionResult,
   TagTranslationDatabase,
   TagTranslationSearchResult,
@@ -36,10 +37,17 @@ import { SerialRateLimiter } from "./rate-limiter.js";
 import { AsyncTtlCache } from "./cache.js";
 import { parseTagTranslationDatabase, searchTranslatedTags } from "./tag-translations.js";
 import { organizeGalleryWorks } from "./gallery-works.js";
+import { extractSimilarGalleryTitle } from "./gallery-title.js";
 
 const TAG_TRANSLATION_DATABASE_URL = "https://raw.githubusercontent.com/EhTagTranslation/Database/release/db.text.json";
 const TAG_TRANSLATION_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
 const TAG_TRANSLATION_MAX_BYTES = 8 * 1024 * 1024;
+
+function quoteSearchValue(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed || /["\r\n]/u.test(trimmed)) throw new Error("Similar-gallery search value is invalid");
+  return `"${trimmed}"`;
+}
 
 export interface EhClientOptions {
   fetch?: typeof fetch;
@@ -353,6 +361,34 @@ export class EhClient {
       const response = await this.#request(buildSearchUrl(options), site);
       return parseGalleryList(await response.text());
     }));
+  }
+
+  async findSimilarGalleries(ref: GalleryRef, site: EhSite = "e-hentai"): Promise<SimilarGallerySearchResult> {
+    const metadata = (await this.getGalleryMetadata([ref], site))[0];
+    if (!metadata || metadata.error) {
+      throw new Error(metadata?.error ?? "E-Hentai API returned no metadata for the gallery");
+    }
+
+    const title = extractSimilarGalleryTitle(metadata.title ?? metadata.title_jpn);
+    let strategy: SimilarGallerySearchResult["strategy"];
+    let query: string;
+    if (title) {
+      strategy = "title";
+      query = quoteSearchValue(title);
+    } else {
+      const artist = metadata.tags?.find((tag) => tag.startsWith("artist:"))?.slice("artist:".length).trim();
+      if (artist) {
+        strategy = "artist";
+        query = `artist:${quoteSearchValue(artist)}$`;
+      } else if (metadata.uploader?.trim()) {
+        strategy = "uploader";
+        query = `uploader:${quoteSearchValue(metadata.uploader)}`;
+      } else {
+        throw new Error("Gallery has no extractable title, artist tag, or uploader for similar-gallery search");
+      }
+    }
+
+    return { strategy, query, result: await this.search({ site, query }) };
   }
 
   async searchGalleryWorks(options: GalleryWorkSearchOptions): Promise<GalleryWorkSearchResult> {

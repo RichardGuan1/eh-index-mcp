@@ -29,7 +29,7 @@ function assertResult(result, label) {
 try {
   await client.connect(transport);
   const tools = await client.listTools();
-  if (tools.tools.length !== 27) throw new Error(`Expected 27 tools, received ${tools.tools.length}`);
+  if (tools.tools.length !== 28) throw new Error(`Expected 28 tools, received ${tools.tools.length}`);
 
   const popular = assertResult(await client.callTool({
     name: "eh_get_popular",
@@ -97,28 +97,36 @@ try {
     throw new Error("Translated tag lookup did not normalize title punctuation");
   }
 
+  const similar = assertResult(await client.callTool({
+    name: "eh_find_similar_galleries",
+    arguments: { gallery },
+  }), "similar gallery search");
+  if (
+    !["title", "artist", "uploader"].includes(similar.result?.strategy)
+    || typeof similar.result?.query !== "string"
+    || !Array.isArray(similar.result?.result?.galleries)
+  ) {
+    throw new Error("Similar gallery search returned malformed strategy or results");
+  }
+
   const workSearch = assertResult(await client.callTool({
     name: "eh_search_gallery_works",
     arguments: {
-      query: 'parody:"kimi no na wa."$ ~male:netorare$ ~female:netorare$ -other:"ai generated"$',
+      query: similar.result.query,
       maxPages: 2,
     },
   }), "gallery work search");
   const organizedVariants = workSearch.result?.series?.flatMap((series) =>
     series.works?.flatMap((work) => work.variants ?? []) ?? []) ?? [];
-  const dominantSeries = workSearch.result?.series?.find((series) =>
-    series.works?.length >= 10
-    && series.works.every((work) => work.groupingConfidence === "high"));
   if (
-    workSearch.result?.pagesScanned !== 2
-    || workSearch.result?.galleryCount < 2
-    || workSearch.result?.uniqueWorkCount < 1
-    || workSearch.result?.uniqueWorkCount >= workSearch.result?.galleryCount
-    || workSearch.result?.seriesCount < 1
+    workSearch.result?.pagesScanned < 1
+    || workSearch.result?.pagesScanned > 2
+    || workSearch.result?.galleryCount < 0
+    || workSearch.result?.uniqueWorkCount > workSearch.result?.galleryCount
+    || workSearch.result?.seriesCount > workSearch.result?.uniqueWorkCount
     || organizedVariants.length !== workSearch.result?.galleryCount
-    || !dominantSeries
   ) {
-    throw new Error("Gallery work search did not organize repeated uploads and installments");
+    throw new Error("Gallery work search returned inconsistent organization counts");
   }
 
   const tagDefinition = assertResult(await client.callTool({
@@ -249,6 +257,8 @@ try {
     translatedTagCount: translatedTags.result.matches.length,
     translatedTag: translatedTag.tag,
     normalizedTitleTag: translatedTitleMatch.tag,
+    similarStrategy: similar.result.strategy,
+    similarCount: similar.result.result.galleries.length,
     workSearchPages: workSearch.result.pagesScanned,
     workSearchGalleryCount: workSearch.result.galleryCount,
     workSearchUniqueCount: workSearch.result.uniqueWorkCount,

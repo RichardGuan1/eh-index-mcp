@@ -1,6 +1,6 @@
 # EH Index MCP
 
-A read-only local MCP server for E-Hentai and ExHentai. It exposes gallery, SHA-1, and local-file search; multi-page work and series organization; structured query building; Chinese tag resolution through EhTagTranslation; popular galleries; official metadata and token resolution with automatic batching; comments; detailed gallery information; version comparison; full gallery-page enumeration; image-page resolution; torrent metadata; EHWiki tag definitions; access diagnostics; and authenticated favorite and archive metadata.
+A read-only local MCP server for E-Hentai and ExHentai. It exposes gallery, EhViewer-compatible similar-gallery, SHA-1, and local-file search; multi-page work and series organization; structured query building; Chinese tag resolution through EhTagTranslation; popular galleries; official metadata and token resolution with automatic batching; comments; detailed gallery information; version comparison; full gallery-page enumeration; image-page resolution; torrent metadata; EHWiki tag definitions; access diagnostics; and authenticated favorite and archive metadata.
 
 ## Requirements
 
@@ -75,7 +75,8 @@ All values must be non-negative integers. Increasing request rates can trigger E
 ## Tools
 
 - `eh_search_galleries`: Native E-Hentai search syntax, categories, rating, page range, torrents, expunged galleries, and cursor pagination.
-- `eh_search_gallery_works`: Scan up to 10 search pages, deduplicate repeated gallery uploads, merge official version links and likely language/upload variants into independent works, and group numbered installments into series. `galleryCount` counts unique gallery uploads; `uniqueWorkCount` is a heuristic estimate. Every work returns a confidence level and retains all source galleries. Use `next` to resume when `truncated` is true.
+- `eh_find_similar_galleries`: Reproduce EhViewer's similar-gallery strategy for one gallery: structurally extract the title and run a quoted search, then fall back to the first artist tag or uploader if no title remains. The response includes the selected strategy and native query.
+- `eh_search_gallery_works`: Scan up to 10 search pages, deduplicate repeated gallery uploads, merge official version links and likely language/upload variants into independent works, and group related titles by the same structural title extraction used by EhViewer's quoted similar-gallery search. No subject or route names are built into the grouping logic. `galleryCount` counts unique gallery uploads; `uniqueWorkCount` is a heuristic estimate. Every work returns a confidence level and retains all source galleries. Use `next` to resume when `truncated` is true.
 - `eh_search_by_hash`: Exact SHA-1 image search without uploading an image.
 - `eh_search_by_file`: Calculate SHA-1 for one explicitly provided absolute local file and search it without uploading the file. Directories, wildcards, relative paths, and oversized files are rejected.
 - `eh_build_search_query`: Build and validate native include, exclude, OR, exact-tag, and title search syntax.

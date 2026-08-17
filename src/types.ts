@@ -358,3 +358,9 @@ export interface GalleryWorkSearchResult extends GalleryWorkOrganization {
   truncated: boolean;
   next: string | null;
 }
+
+export interface SimilarGallerySearchResult {
+  strategy: "title" | "artist" | "uploader";
+  query: string;
+  result: GalleryListResult;
+}
