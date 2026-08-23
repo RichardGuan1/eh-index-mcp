@@ -10,6 +10,11 @@ describe("HTML parsers", () => {
     expect(() => parseGalleryList(challenge)).toThrow("Cloudflare challenge");
   });
 
+  it("rejects a login page instead of returning empty results", () => {
+    const login = '<html><title>E-Hentai.org Login</title><form name="ipb_login_form"></form></html>';
+    expect(() => parseGalleryList(login)).toThrow("login page");
+  });
+
   it("rejects an IP-ban page and preserves the reported remaining time", () => {
     const banned = "Your IP address has been temporarily banned for excessive pageloads which indicates that you are using automated mirroring/harvesting software. The ban expires in 59 minutes and 48 seconds";
     expect(() => parseGalleryList(banned)).toThrow("IP temporarily banned for 59 minutes and 48 seconds");

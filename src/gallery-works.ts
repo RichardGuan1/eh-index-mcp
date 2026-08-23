@@ -122,9 +122,11 @@ function preferredVariant(variants: GalleryWorkVariant[], preferredGid: number |
 }
 
 export function organizeGalleryWorks(metadata: GalleryMetadata[], site: EhSite): GalleryWorkOrganization {
-  const valid = metadata.filter((entry) => !entry.error && entry.token && (entry.title || entry.title_jpn));
-  const officialKeys = new Map<string, { key: string; preferredGid: number }>();
   const refKey = (gid: string | number, token: string) => `${Number(gid)}:${token.toLowerCase()}`;
+  const valid = metadata
+    .filter((entry) => !entry.error && entry.token && (entry.title || entry.title_jpn))
+    .sort((left, right) => refKey(left.gid, left.token!).localeCompare(refKey(right.gid, right.token!)));
+  const officialKeys = new Map<string, { key: string; preferredGid: number }>();
   for (const entry of valid) {
     const currentGid = Number(entry.current_gid);
     if (!Number.isInteger(currentGid) || currentGid < 1 || !entry.current_key) continue;
@@ -143,11 +145,22 @@ export function organizeGalleryWorks(metadata: GalleryMetadata[], site: EhSite):
     const aliases = creatorAliases(creators);
     const official = officialKeys.get(refKey(entry.gid, entry.token!));
     const titleKey = normalizedKey(identity.baseTitle);
-    const related = official ? null : [...workGroups.entries()].find(([, candidate]) =>
+    const relatedGroups = official ? [] : [...workGroups.entries()].filter(([, candidate]) =>
       normalizedKey(candidate.identity.baseTitle) === titleKey
       && aliases.length > 0
       && sharesCreator(candidate.creatorAliases, aliases));
+    const related = relatedGroups[0];
     const key = official?.key ?? related?.[0] ?? `${creators.join("|") || `gid:${entry.gid}`}::${titleKey}`;
+    if (!official && relatedGroups.length > 1) {
+      const primary = workGroups.get(key)!;
+      for (const [mergeKey, candidate] of relatedGroups.slice(1)) {
+        primary.creators = mergeCreators(primary.creators, candidate.creators);
+        primary.creatorAliases = mergeCreators(primary.creatorAliases, candidate.creatorAliases);
+        primary.variants.push(...candidate.variants);
+        if (candidate.basis === "normalized-title-and-creator") primary.basis = candidate.basis;
+        workGroups.delete(mergeKey);
+      }
+    }
     const group = workGroups.get(key) ?? {
       identity,
       creators,

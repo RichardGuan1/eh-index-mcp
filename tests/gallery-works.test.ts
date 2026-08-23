@@ -205,4 +205,16 @@ describe("gallery work organization", () => {
       groupingExplanation: "Kept as a standalone work because no official version chain or creator-backed title match was found.",
     });
   });
+
+  it("keeps heuristic grouping deterministic when a creator bridges two candidates", () => {
+    const first = gallery({ gid: 301, title: "[Circle X] Shared Work", tags: ["group:circle x"] });
+    const second = gallery({ gid: 302, title: "[Circle Y] Shared Work", tags: ["group:circle y"] });
+    const bridge = gallery({ gid: 303, title: "[Circle XY] Shared Work", tags: ["group:circle x", "group:circle y"] });
+
+    const forward = organizeGalleryWorks([first, second, bridge], "e-hentai");
+    const reverse = organizeGalleryWorks([bridge, second, first], "e-hentai");
+
+    expect(reverse).toEqual(forward);
+    expect(forward.uniqueWorkCount).toBe(1);
+  });
 });

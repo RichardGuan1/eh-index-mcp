@@ -48,6 +48,35 @@ describe("extended EhClient workflows", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
+  it("restores input order when the metadata API reorders unique rows", async () => {
+    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const request = JSON.parse(String(init?.body));
+      return jsonResponse({
+        gmetadata: [...request.gidlist].reverse().map(([gid, token]: [number, string]) => ({ gid, token })),
+      });
+    });
+    const client = new EhClient({ fetch: fetchMock as typeof fetch, apiLimiter: noWait() });
+    const result = await client.getGalleryMetadata([
+      { gid: 1, token: "1111111111" },
+      { gid: 2, token: "2222222222" },
+    ]);
+
+    expect(result.map((item) => item.gid)).toEqual([1, 2]);
+  });
+
+  it("preserves the ExHentai host in popular relative gallery links", async () => {
+    const html = '<table class="itg"><tr><td class="gl3c glname"><a href="/g/7/123456789a/"><div class="glink">Popular</div></a></td></tr></table>';
+    const client = new EhClient({
+      cookies: { memberId: "42", passHash: "valid", igneous: "valid" },
+      fetch: vi.fn(async () => new Response(html)) as typeof fetch,
+      pageLimiter: noWait(),
+    });
+
+    await expect(client.popular("exhentai")).resolves.toMatchObject({
+      galleries: [expect.objectContaining({ url: "https://exhentai.org/g/7/123456789a/" })],
+    });
+  });
+
   it("uses a configurable metadata cache TTL", async () => {
     const fetchMock = vi.fn(async () => jsonResponse({ gmetadata: [{ gid: 1, token: "123456789a" }] }));
     const client = new EhClient({ fetch: fetchMock as typeof fetch, apiLimiter: noWait(), longCacheTtlMs: 0 });

@@ -287,7 +287,6 @@ export class EhClient {
       if (!Array.isArray(body.gmetadata)) throw new Error("E-Hentai API returned malformed gallery metadata");
       return body.gmetadata;
     }));
-    if (uniqueEntries.length === entries.length) return metadata;
     const byKey = new Map(metadata.filter((entry) => entry.token).map((entry) => [refKey(entry as GalleryRef), entry]));
     const byGid = new Map(metadata.map((entry) => [Number(entry.gid), entry]));
     return entries.flatMap((entry) => {
@@ -559,7 +558,7 @@ export class EhClient {
   async popular(site: EhSite = "e-hentai"): Promise<GalleryListResult> {
     return this.#cached(`popular:${site}`, this.#popularCacheTtlMs, () => this.#pageLimiter.run(async () => {
       const response = await this.#request(`https://${site === "exhentai" ? "exhentai.org" : "e-hentai.org"}/popular`, site);
-      return parseGalleryList(await response.text());
+      return parseGalleryList(await response.text(), site);
     }));
   }
 
@@ -665,11 +664,12 @@ export class EhClient {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const authenticationRequired = /requires EH_MEMBER_ID|Favorites require/i.test(message);
+      const authenticationRejected = /login page|credentials expired|credentials.*rejected/i.test(message);
       return {
         site,
-        reachable: authenticationRequired ? true : null,
+        reachable: authenticationRequired || authenticationRejected ? true : null,
         credentialsProvided,
-        authenticated: credentialsProvided ? null : false,
+        authenticated: authenticationRejected ? false : credentialsProvided ? null : false,
         cloudflareChallenge: /Cloudflare challenge/i.test(message),
         status: error instanceof HttpStatusError ? error.status : null,
         message,
