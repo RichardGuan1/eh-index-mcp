@@ -53,6 +53,16 @@ describe("HTML parsers", () => {
     ]);
   });
 
+  it("resolves relative gallery links against the requested ExHentai site", () => {
+    const html = `<table class="itg"><tr>
+      <td class="gl1c"><div class="cn">Manga</div></td>
+      <td class="gl3c glname"><a href="/g/123/123456789a/"><div class="glink">ExHentai result</div></a></td>
+    </tr></table>`;
+
+    expect(parseGalleryList(html, "exhentai").galleries[0]?.url)
+      .toBe("https://exhentai.org/g/123/123456789a/");
+  });
+
   it("rejects a 509 placeholder image returned with HTTP 200", () => {
     const html = '<div id="i3"><img id="img" src="https://ehgt.org/g/509.gif"></div>';
     expect(() => parseImagePage(html)).toThrow("image quota exhausted");
@@ -77,5 +87,14 @@ describe("HTML parsers", () => {
       nextPageUrl: "https://e-hentai.org/s/nexttoken00/123-2",
       previousPageUrl: "https://e-hentai.org/s/prevtoken00/123-1",
     });
+  });
+
+  it("resolves relative image navigation against ExHentai", async () => {
+    const html = (await fixture("image-page.html")).replaceAll("https://e-hentai.org/", "/");
+    const result = parseImagePage(html, "exhentai");
+
+    expect(result.originalImageUrl).toBe("https://exhentai.org/fullimg/123/1/key/image.jpg");
+    expect(result.nextPageUrl).toBe("https://exhentai.org/s/nexttoken00/123-2");
+    expect(result.previousPageUrl).toBe("https://exhentai.org/s/prevtoken00/123-1");
   });
 });

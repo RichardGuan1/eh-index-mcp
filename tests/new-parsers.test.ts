@@ -8,6 +8,7 @@ const fixture = (name: string) => readFile(new URL(`./fixtures/${name}`, import.
 describe("extended HTML parsers", () => {
   it("parses gallery details, tag strength, and newer versions", async () => {
     expect(parseGalleryDetail(await fixture("gallery-detail.html"))).toEqual({
+      description: null,
       gallery: {
         gid: 123,
         token: "123456789a",
@@ -38,6 +39,16 @@ describe("extended HTML parsers", () => {
     const html = '<html><div id="gn">No script identity</div><div id="gdc">Manga</div><div id="gdd"><table></table></div><div id="taglist"><table></table></div></html>';
     const ref: GalleryRef = { gid: 321, token: "abcdef1234" };
     expect(parseGalleryDetail(html, ref).gallery).toEqual(expect.objectContaining(ref));
+  });
+
+  it("extracts the gallery description as sanitized untrusted text", () => {
+    const html = `<html><div id="gn">Title</div><div id="gdc">Manga</div>
+      <div id="gdd"><table></table></div><div id="taglist"><table></table></div>
+      <div id="gld"><p>First line<br>Second <strong>line</strong></p><script>ignore()</script></div></html>`;
+    expect(parseGalleryDetail(html, { gid: 321, token: "abcdef1234" }).description).toEqual({
+      text: "First line\nSecond line",
+      untrusted: true,
+    });
   });
 
   it("parses current and outdated torrent records", async () => {

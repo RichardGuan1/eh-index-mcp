@@ -1,0 +1,52 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.RichardGuan1/eh-index-mcp",
+  "title": "EH Index MCP",
+  "description": "A read-only MCP server for searching and exploring E-Hentai and ExHentai galleries.",
+  "repository": {
+    "url": "https://github.com/RichardGuan1/eh-index-mcp",
+    "source": "github"
+  },
+  "version": "0.1.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "eh-index-mcp",
+      "version": "0.1.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "EH_MEMBER_ID",
+          "description": "Optional E-Hentai identity cookie for authenticated read-only tools.",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "EH_PASS_HASH",
+          "description": "Optional E-Hentai identity cookie for authenticated read-only tools.",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "EH_IGNEOUS",
+          "description": "Optional ExHentai identity cookie for authenticated read-only access.",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "EH_CF_CLEARANCE",
+          "description": "Optional Cloudflare session cookie for compatibility with an existing browser session.",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}

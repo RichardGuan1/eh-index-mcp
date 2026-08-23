@@ -30,6 +30,9 @@ describe("gallery work organization", () => {
     expect(syukurin?.works.map((work) => work.installment)).toEqual(["9", "10"]);
     expect(syukurin?.works.find((work) => work.installment === "10")?.variants).toHaveLength(3);
     expect(syukurin?.works.find((work) => work.installment === "10")?.availableLanguages).toEqual(["chinese", "english"]);
+    expect(syukurin?.works.find((work) => work.installment === "10")?.groupingBasis).toBe("normalized-title-and-creator");
+    expect(syukurin?.works.find((work) => work.installment === "10")?.groupingExplanation)
+      .toContain("normalized title and shared creator");
 
     const kashikomura = result.series.find((series) => series.creators.includes("group:kashikomura"));
     expect(kashikomura?.works).toHaveLength(1);
@@ -188,5 +191,18 @@ describe("gallery work organization", () => {
     expect(result.series[0]?.works[0]?.variants).toHaveLength(2);
     expect(result.series[0]?.works[0]?.creators).toEqual(["artist:syukurin", "group:syukurin"]);
     expect(result.series[0]?.works[0]?.preferredGallery.gid).toBe(202);
+    expect(result.series[0]?.works[0]?.groupingBasis).toBe("official-version-chain");
+    expect(result.series[0]?.works[0]?.groupingExplanation).toContain("official current-version links");
+  });
+
+  it("reports standalone when no official chain or creator-backed match exists", () => {
+    const result = organizeGalleryWorks([
+      gallery({ gid: 203, title: "Unrelated upload", tags: [] }),
+    ], "e-hentai");
+
+    expect(result.series[0]?.works[0]).toMatchObject({
+      groupingBasis: "standalone",
+      groupingExplanation: "Kept as a standalone work because no official version chain or creator-backed title match was found.",
+    });
   });
 });

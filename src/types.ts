@@ -92,6 +92,18 @@ export interface GalleryListResult {
   next: string | null;
 }
 
+export interface GalleryBatchSearchOptions extends Omit<SearchOptions, "prev" | "seek"> {
+  maxPages?: number;
+}
+
+export interface GalleryBatchSearchResult {
+  galleries: GallerySummary[];
+  pagesScanned: number;
+  resultCount: number;
+  truncated: boolean;
+  next: string | null;
+}
+
 export interface FileSearchResult {
   path: string;
   size: number;
@@ -163,8 +175,14 @@ export interface GalleryDetailSummary {
 
 export interface GalleryDetailResult {
   gallery: GalleryDetailSummary;
+  description: GalleryDescription | null;
   tagGroups: GalleryTagGroup[];
   newerVersions: GalleryNewerVersion[];
+}
+
+export interface GalleryDescription {
+  text: string;
+  untrusted: true;
 }
 
 export interface GalleryTorrent {
@@ -329,6 +347,8 @@ export interface GalleryWork {
   creators: string[];
   availableLanguages: string[];
   groupingConfidence: "high" | "medium" | "low";
+  groupingBasis: "official-version-chain" | "normalized-title-and-creator" | "standalone";
+  groupingExplanation: string;
   preferredGallery: GalleryWorkVariant;
   variants: GalleryWorkVariant[];
 }

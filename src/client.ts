@@ -11,6 +11,8 @@ import type {
   FavoriteDetailResult,
   FavoritesOptions,
   FileSearchResult,
+  GalleryBatchSearchOptions,
+  GalleryBatchSearchResult,
   GalleryDetailResult,
   GalleryCommentsResult,
   GalleryListResult,
@@ -31,13 +33,14 @@ import type {
   TagTranslationDatabase,
   TagTranslationSearchResult,
 } from "./types.js";
-import { apiUrl, buildFavoritesUrl, buildHashSearchUrl, buildSearchUrl, galleryTorrentsUrl, galleryUrl, pageUrl } from "./urls.js";
+import { apiUrl, buildFavoritesUrl, buildHashSearchUrl, buildSearchUrl, buildWatchedUrl, galleryTorrentsUrl, galleryUrl, pageUrl } from "./urls.js";
 import { assertNotChallengePage, parseArchiveOptions, parseFavoriteCategories, parseFavoriteDetail, parseGalleryComments, parseGalleryDetail, parseGalleryList, parseGalleryPages, parseImagePage, parseTagDefinition, parseTorrents } from "./parsers.js";
 import { SerialRateLimiter } from "./rate-limiter.js";
 import { AsyncTtlCache } from "./cache.js";
 import { parseTagTranslationDatabase, searchTranslatedTags } from "./tag-translations.js";
 import { organizeGalleryWorks } from "./gallery-works.js";
 import { extractSimilarGalleryTitle } from "./gallery-title.js";
+import { VERSION } from "./version.js";
 
 const TAG_TRANSLATION_DATABASE_URL = "https://raw.githubusercontent.com/EhTagTranslation/Database/release/db.text.json";
 const TAG_TRANSLATION_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
@@ -195,7 +198,7 @@ export class EhClient {
     validateCookies(options.cookies);
     this.#fetch = options.fetch ?? fetch;
     this.#cookies = options.cookies;
-    this.#userAgent = options.userAgent ?? "eh-index-mcp/0.1.0";
+    this.#userAgent = options.userAgent ?? `eh-index-mcp/${VERSION}`;
     this.#timeoutMs = options.timeoutMs ?? 30_000;
     this.#maxRetries = options.maxRetries ?? 2;
     this.#retryBaseMs = options.retryBaseMs ?? 1_000;
@@ -359,8 +362,42 @@ export class EhClient {
     const key = `search:${site}:${JSON.stringify(options)}`;
     return this.#cached(key, this.#shortCacheTtlMs, () => this.#searchLimiter.run(async () => {
       const response = await this.#request(buildSearchUrl(options), site);
-      return parseGalleryList(await response.text());
+      return parseGalleryList(await response.text(), site);
     }));
+  }
+
+  async searchBatch(options: GalleryBatchSearchOptions): Promise<GalleryBatchSearchResult> {
+    const maxPages = options.maxPages ?? 5;
+    if (!Number.isInteger(maxPages) || maxPages < 1 || maxPages > 10) {
+      throw new Error("maxPages must be an integer from 1 to 10");
+    }
+    const { maxPages: _maxPages, next: initialNext, ...searchOptions } = options;
+    const galleries = new Map<string, GalleryListResult["galleries"][number]>();
+    const seenCursors = new Set<string>();
+    let next = initialNext ?? null;
+    let pagesScanned = 0;
+
+    for (; pagesScanned < maxPages; pagesScanned += 1) {
+      if (next) {
+        if (seenCursors.has(next)) throw new Error(`Search cursor repeated: ${next}`);
+        seenCursors.add(next);
+      }
+      const page = await this.search({ ...searchOptions, ...(next ? { next } : {}) });
+      for (const gallery of page.galleries) galleries.set(`${gallery.gid}:${gallery.token.toLowerCase()}`, gallery);
+      next = page.next;
+      if (!next) {
+        pagesScanned += 1;
+        break;
+      }
+    }
+
+    return {
+      galleries: [...galleries.values()],
+      pagesScanned,
+      resultCount: galleries.size,
+      truncated: next !== null,
+      next,
+    };
   }
 
   async findSimilarGalleries(ref: GalleryRef, site: EhSite = "e-hentai"): Promise<SimilarGallerySearchResult> {
@@ -435,7 +472,7 @@ export class EhClient {
     const key = `hash:${site}:${sha1.toLowerCase()}`;
     return this.#cached(key, this.#shortCacheTtlMs, () => this.#searchLimiter.run(async () => {
       const response = await this.#request(buildHashSearchUrl(sha1, site), site);
-      return parseGalleryList(await response.text());
+      return parseGalleryList(await response.text(), site);
     }));
   }
 
@@ -465,7 +502,23 @@ export class EhClient {
       if (isLoginPage(html)) {
         throw new Error("E-Hentai favorites credentials expired or were rejected; refresh EH_MEMBER_ID and EH_PASS_HASH");
       }
-      return parseGalleryList(html);
+      return parseGalleryList(html, site);
+    }));
+  }
+
+  async searchWatched(options: SearchOptions): Promise<GalleryListResult> {
+    if (!this.#cookies?.memberId || !this.#cookies.passHash) {
+      throw new Error("Watched searches require EH_MEMBER_ID and EH_PASS_HASH credentials");
+    }
+    const site = options.site ?? "e-hentai";
+    const key = `watched:${site}:${JSON.stringify(options)}`;
+    return this.#cached(key, this.#shortCacheTtlMs, () => this.#searchLimiter.run(async () => {
+      const response = await this.#request(buildWatchedUrl(options), site);
+      const html = await response.text();
+      if (isLoginPage(html)) {
+        throw new Error("E-Hentai watched credentials expired or were rejected; refresh EH_MEMBER_ID and EH_PASS_HASH");
+      }
+      return parseGalleryList(html, site);
     }));
   }
 
@@ -693,7 +746,7 @@ export class EhClient {
       const url = new URL(galleryUrl(ref, site));
       if (previewPage > 0) url.searchParams.set("p", String(previewPage));
       const response = await this.#request(url.toString(), site);
-      return parseGalleryPages(await response.text());
+      return parseGalleryPages(await response.text(), site);
     }));
   }
 
@@ -718,7 +771,7 @@ export class EhClient {
   async getImagePage(ref: PageRef, site: EhSite = "e-hentai"): Promise<ImagePageResult> {
     return this.#cached(`image:${site}:${ref.gid}:${ref.pageToken}:${ref.page}`, this.#shortCacheTtlMs, () => this.#pageLimiter.run(async () => {
       const response = await this.#request(pageUrl(ref, site), site);
-      return parseImagePage(await response.text());
+      return parseImagePage(await response.text(), site);
     }));
   }
 }

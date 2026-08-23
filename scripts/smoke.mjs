@@ -29,7 +29,7 @@ function assertResult(result, label) {
 try {
   await client.connect(transport);
   const tools = await client.listTools();
-  if (tools.tools.length !== 28) throw new Error(`Expected 28 tools, received ${tools.tools.length}`);
+  if (tools.tools.length !== 30) throw new Error(`Expected 30 tools, received ${tools.tools.length}`);
 
   const popular = assertResult(await client.callTool({
     name: "eh_get_popular",

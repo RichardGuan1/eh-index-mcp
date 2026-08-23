@@ -26,4 +26,14 @@ describe("gallery preview parsing", () => {
       ],
     });
   });
+
+  it("resolves relative image-page links against ExHentai", async () => {
+    const html = (await fixture("gallery-pages.html")).replaceAll("https://e-hentai.org/", "/");
+    const result = parseGalleryPages(html, "exhentai");
+
+    expect(result.pages.map((page) => page.url)).toEqual([
+      "https://exhentai.org/s/aaaaaaaaaa/123-1",
+      "https://exhentai.org/s/bbbbbbbbbb/123-2",
+    ]);
+  });
 });

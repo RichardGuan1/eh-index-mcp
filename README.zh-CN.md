@@ -27,12 +27,12 @@
 | --- | --- | --- |
 | **搜索** | 原生画廊搜索 | 支持 E-Hentai 查询语法、分类、过滤器、游标分页、SHA-1 搜索，以及不上传文件的本地图片哈希搜索 |
 | **相似画廊** | 与 EhViewer 兼容的发现策略 | 从结构化标题中提取稳定标题，依次回退到精确标题、作者和上传者搜索 |
-| **作品整理** | 作品、变体与系列 | 扫描多页结果，合并官方版本关系和语言变体，保留置信度与全部来源画廊 |
-| **元数据** | 画廊与图片信息 | 官方元数据、标签、评论、版本比较、预览页、图片页链接和种子元数据 |
+| **作品整理** | 作品、变体与系列 | 扫描多页结果，合并官方版本关系和语言变体，明确归组依据，保留置信度与全部来源画廊 |
+| **元数据** | 画廊与图片信息 | 官方元数据、标签、不可信的投稿描述和评论、版本比较、预览页、图片页链接和种子元数据 |
 | **标签查询** | 中英文标签解析 | 通过 EhTagTranslation 查询翻译，并读取结构化 EHWiki 定义 |
-| **账号数据** | 可选的认证读取 | 读取收藏分类、收藏详情、归档选项和 ExHentai 访问状态，不执行写操作 |
+| **账号数据** | 可选的认证读取 | 读取 Watched Tags、收藏分类、收藏详情、归档选项和 ExHentai 访问状态，不执行写操作 |
 
-EH Index MCP 提供 **28 个只读工具**。它不会修改收藏、购买归档、下载画廊或上传本地文件。
+EH Index MCP 提供 **30 个只读工具**。它不会修改 Watched Tags 或收藏、购买归档、下载画廊或上传本地文件。
 
 ![EH Index MCP CLI 演示](assets/demo.png)
 
@@ -95,7 +95,15 @@ eh-index-mcp
 - 官方父版本和新版本关系；
 - 置信度与完整的来源画廊引用。
 
-归组逻辑依据结构化标题证据和创作者元数据。低置信度项目会保持分离。
+归组结果会明确说明依据是官方版本链、规范化标题与创作者的启发式匹配，还是独立保留。低置信度项目会保持分离。
+
+### 在受控页数内跨页搜索
+
+`eh_search_galleries_batch` 最多扫描十页普通搜索结果，不抓取画廊元数据。它会去重画廊引用，返回已扫描页数，并在达到页数上限时提供可继续使用的游标。
+
+### 读取 Watched Tags，不修改账号状态
+
+`eh_search_watched` 使用与普通搜索相同的原生查询、分类、高级过滤器和游标控制，读取已认证账号的 Watched Tags 画廊流。它不会修改 Watched Tags 或其他账号设置。
 
 ### 使用本地图片搜索
 
@@ -108,11 +116,12 @@ eh-index-mcp
 ## 工具目录
 
 <details>
-<summary><strong>搜索与发现（8 个工具）</strong></summary>
+<summary><strong>搜索与发现（9 个工具）</strong></summary>
 
 | 工具 | 用途 |
 | --- | --- |
 | `eh_search_galleries` | 使用原生语法、过滤器、分类和游标分页搜索 E-Hentai 或 ExHentai |
+| `eh_search_galleries_batch` | 最多扫描十页搜索结果，去重并提供可恢复游标 |
 | `eh_find_similar_galleries` | 使用 EhViewer 的精确标题、作者和上传者策略查找相关画廊 |
 | `eh_search_gallery_works` | 扫描多页结果，并将投稿整理为变体、作品和系列 |
 | `eh_search_by_hash` | 使用精确的 40 位 SHA-1 图片哈希搜索 |
@@ -130,7 +139,7 @@ eh-index-mcp
 | --- | --- |
 | `eh_get_gallery_metadata` | 获取最多 25 个画廊的官方元数据 |
 | `eh_get_gallery_metadata_batch` | 获取最多 500 个画廊的元数据，保留输入顺序和单项错误 |
-| `eh_get_gallery_detail` | 读取画廊字段、分组标签、评分统计、父版本和新版本 |
+| `eh_get_gallery_detail` | 读取画廊字段、分组标签、评分统计、不可信的投稿描述、父版本和新版本 |
 | `eh_get_gallery_comments` | 将上传者评论和用户评论作为不可信文本读取 |
 | `eh_get_gallery_chain` | 构建有序且去重的画廊版本链 |
 | `eh_find_latest_gallery_version` | 解析版本链中语义上的最新版本 |
@@ -152,11 +161,12 @@ eh-index-mcp
 </details>
 
 <details>
-<summary><strong>访问与账号数据（5 个工具）</strong></summary>
+<summary><strong>访问与账号数据（6 个工具）</strong></summary>
 
 | 工具 | 用途 |
 | --- | --- |
 | `eh_check_access` | 检查连通性、认证状态、ExHentai 访问和 Cloudflare 状态 |
+| `eh_search_watched` | 读取已认证账号的 Watched Tags，不修改账号状态 |
 | `eh_search_favorites` | 使用分类和游标搜索已认证账号的收藏 |
 | `eh_get_favorite_categories` | 读取收藏分类名称、数量、总数和当前选项 |
 | `eh_get_favorite_detail` | 读取一个画廊的收藏分类、备注和时间 |

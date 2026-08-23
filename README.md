@@ -27,12 +27,12 @@ Search galleries, follow version chains, resolve image pages, inspect metadata, 
 | --- | --- | --- |
 | **Search** | Native gallery search | E-Hentai query syntax, categories, filters, cursors, SHA-1 search, and local-file hashing without file uploads |
 | **Similarity** | EhViewer-compatible discovery | Structural title extraction with quoted-title, artist, and uploader fallbacks |
-| **Organization** | Works, variants, and series | Multi-page result scanning with official version links, upload deduplication, language variants, confidence levels, and source preservation |
-| **Metadata** | Gallery and image details | Official metadata, tags, comments, version comparisons, preview pages, image-page links, and torrent metadata |
+| **Organization** | Works, variants, and series | Multi-page result scanning with official version links, upload deduplication, language variants, explicit grouping evidence, confidence levels, and source preservation |
+| **Metadata** | Gallery and image details | Official metadata, tags, untrusted descriptions and comments, version comparisons, preview pages, image-page links, and torrent metadata |
 | **Tag lookup** | Chinese and English tag resolution | Runtime lookup through EhTagTranslation plus structured EHWiki definitions |
-| **Account data** | Optional authenticated reads | Favorite categories, favorite details, archive options, and ExHentai access, with no write operations |
+| **Account data** | Optional authenticated reads | Watched Tags, favorite categories, favorite details, archive options, and ExHentai access, with no write operations |
 
-EH Index MCP exposes **28 read-only tools**. It does not modify favorites, purchase archives, download galleries, or upload local files.
+EH Index MCP exposes **30 read-only tools**. It does not modify watched tags or favorites, purchase archives, download galleries, or upload local files.
 
 ![EH Index MCP CLI demo](assets/demo.png)
 
@@ -95,7 +95,15 @@ The response reports the selected strategy and native query alongside the galler
 - official parent/newer-version relationships;
 - confidence levels and complete source-gallery references.
 
-The grouping logic uses structural title evidence and creator metadata. Low-confidence items remain separate.
+The grouping logic reports whether each work came from an official version chain, a heuristic normalized-title-and-creator match, or a standalone fallback. Low-confidence items remain separate.
+
+### Search across a controlled page budget
+
+`eh_search_galleries_batch` scans up to ten ordinary search pages without fetching gallery metadata. It deduplicates gallery references, reports the pages scanned, and returns a resume cursor when the requested page budget truncates the scan.
+
+### Read Watched Tags without changing account state
+
+`eh_search_watched` reads the authenticated Watched Tags feed using the same native query, category, advanced-filter, and cursor controls as ordinary search. It never changes watched tags or other account settings.
 
 ### Search from a local image
 
@@ -108,11 +116,12 @@ The grouping logic uses structural title evidence and creator metadata. Low-conf
 ## Tool catalog
 
 <details>
-<summary><strong>Search and discovery (8 tools)</strong></summary>
+<summary><strong>Search and discovery (9 tools)</strong></summary>
 
 | Tool | Purpose |
 | --- | --- |
 | `eh_search_galleries` | Search E-Hentai or ExHentai with native syntax, filters, categories, and cursor pagination |
+| `eh_search_galleries_batch` | Scan up to ten search pages with deduplication and a resumable cursor |
 | `eh_find_similar_galleries` | Find related galleries with EhViewer's quoted-title, artist, and uploader strategy |
 | `eh_search_gallery_works` | Scan multiple result pages and organize uploads into variants, works, and series |
 | `eh_search_by_hash` | Search by an exact 40-character SHA-1 image hash |
@@ -130,7 +139,7 @@ The grouping logic uses structural title evidence and creator metadata. Low-conf
 | --- | --- |
 | `eh_get_gallery_metadata` | Fetch official metadata for up to 25 galleries |
 | `eh_get_gallery_metadata_batch` | Fetch metadata for up to 500 galleries while preserving order and per-item errors |
-| `eh_get_gallery_detail` | Read gallery fields, grouped tags, rating statistics, parents, and newer versions |
+| `eh_get_gallery_detail` | Read gallery fields, grouped tags, rating statistics, untrusted uploader description, parents, and newer versions |
 | `eh_get_gallery_comments` | Read uploader and user comments as untrusted text |
 | `eh_get_gallery_chain` | Build an ordered, deduplicated gallery-version chain |
 | `eh_find_latest_gallery_version` | Resolve the latest semantic entry in a version chain |
@@ -152,11 +161,12 @@ The grouping logic uses structural title evidence and creator metadata. Low-conf
 </details>
 
 <details>
-<summary><strong>Access and account data (5 tools)</strong></summary>
+<summary><strong>Access and account data (6 tools)</strong></summary>
 
 | Tool | Purpose |
 | --- | --- |
 | `eh_check_access` | Diagnose reachability, authentication, ExHentai access, and Cloudflare state |
+| `eh_search_watched` | Read the authenticated Watched Tags feed without changing account state |
 | `eh_search_favorites` | Search authenticated favorites with categories and cursors |
 | `eh_get_favorite_categories` | Read favorite category names, counts, total, and current selection |
 | `eh_get_favorite_detail` | Read one gallery's favorite category, note, and timestamp |

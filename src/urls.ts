@@ -113,10 +113,20 @@ export function buildSearchUrl(options: SearchOptions): string {
   if (options.disableLanguageFilter) params.set("f_sfl", "on");
   if (options.disableUploaderFilter) params.set("f_sfu", "on");
   if (options.disableTagFilter) params.set("f_sft", "on");
-  if (options.minRating !== undefined) params.set("f_srdd", String(options.minRating));
+  if (options.minRating !== undefined) {
+    params.set("f_sr", "on");
+    params.set("f_srdd", String(options.minRating));
+  }
+  if (options.pageFrom !== undefined || options.pageTo !== undefined) params.set("f_sp", "on");
   if (options.pageFrom !== undefined) params.set("f_spf", String(options.pageFrom));
   if (options.pageTo !== undefined) params.set("f_spt", String(options.pageTo));
 
+  return url.toString();
+}
+
+export function buildWatchedUrl(options: SearchOptions): string {
+  const url = new URL(buildSearchUrl(options));
+  url.pathname = "/watched";
   return url.toString();
 }
 

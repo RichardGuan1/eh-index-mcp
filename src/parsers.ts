@@ -1,6 +1,7 @@
 import { load, type CheerioAPI } from "cheerio";
 import type {
   ArchiveOptionsResult,
+  EhSite,
   FavoriteCategoriesResult,
   FavoriteDetailResult,
   GalleryDetailResult,
@@ -67,14 +68,28 @@ function detailRows($: CheerioAPI): Map<string, string> {
   return rows;
 }
 
-function parseGalleryRow($: CheerioAPI, element: unknown): GallerySummary | null {
+function galleryDescription($: CheerioAPI): GalleryDetailResult["description"] {
+  const node = $("#gld").first().clone();
+  if (!node.length) return null;
+  node.find("script, style, noscript").remove();
+  node.find("br").replaceWith("\n");
+  const text = node.text()
+    .replace(/\r/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return text ? { text, untrusted: true } : null;
+}
+
+function parseGalleryRow($: CheerioAPI, element: unknown, site: EhSite): GallerySummary | null {
   const row = $(element as never);
   const href = row.find(".glname a[href*='/g/'], a[href*='/g/']").first().attr("href");
   if (!href) return null;
+  const baseUrl = site === "exhentai" ? "https://exhentai.org" : "https://e-hentai.org";
 
   let ref;
   try {
-    ref = parseGalleryUrl(new URL(href, "https://e-hentai.org").toString());
+    ref = parseGalleryUrl(new URL(href, baseUrl).toString());
   } catch {
     return null;
   }
@@ -87,7 +102,7 @@ function parseGalleryRow($: CheerioAPI, element: unknown): GallerySummary | null
 
   return {
     ...ref,
-    url: new URL(href, "https://e-hentai.org").toString(),
+    url: new URL(href, baseUrl).toString(),
     title,
     category: row.find(".cn, .cs").first().text().trim(),
     uploader: row.find("a[href*='/uploader/']").first().text().trim() || null,
@@ -99,14 +114,14 @@ function parseGalleryRow($: CheerioAPI, element: unknown): GallerySummary | null
   };
 }
 
-export function parseGalleryList(html: string): GalleryListResult {
+export function parseGalleryList(html: string, site: EhSite = "e-hentai"): GalleryListResult {
   assertNotChallengePage(html);
   const $ = load(html);
   const warning = $(".searchwarn").first().text().trim();
   if (warning) throw new Error(`E-Hentai search error: ${warning}`);
 
   const galleries = $(".itg > tbody > tr, .itg > tr, .itg .gl1t")
-    .map((_, row) => parseGalleryRow($, row))
+    .map((_, row) => parseGalleryRow($, row, site))
     .get()
     .filter((gallery): gallery is GallerySummary => gallery !== null);
 
@@ -323,6 +338,7 @@ export function parseGalleryDetail(html: string, expectedRef?: GalleryRef): Gall
     } catch { /* Ignore malformed version links while keeping valid ones. */ }
   }
   return {
+    description: galleryDescription($),
     gallery: {
       gid,
       token,
@@ -404,12 +420,13 @@ export function parseTorrents(html: string): GalleryTorrent[] {
   }).get().filter((torrent) => torrent.id >= 0 && torrent.url);
 }
 
-function absoluteUrl(value: string | undefined): string | null {
+function absoluteUrl(value: string | undefined, site: EhSite): string | null {
   if (!value) return null;
-  return new URL(value, "https://e-hentai.org").toString();
+  const baseUrl = site === "exhentai" ? "https://exhentai.org" : "https://e-hentai.org";
+  return new URL(value, baseUrl).toString();
 }
 
-export function parseImagePage(html: string): ImagePageResult {
+export function parseImagePage(html: string, site: EhSite = "e-hentai"): ImagePageResult {
   assertNotChallengePage(html);
   if (/You have (?:exceeded|reached) (?:your |the )?image viewing limits|image limit has been reached/i.test(html)
     || /image limit[\s\S]*(?:insufficient GP|do not have sufficient GP|requires GP|do not have enough)/i.test(html)) {
@@ -418,21 +435,21 @@ export function parseImagePage(html: string): ImagePageResult {
   const $ = load(html);
   const imageUrl = $("#img").attr("src") ?? $("#i3 img").attr("src");
   if (!imageUrl) throw new Error("Could not find an image URL on the E-Hentai page");
-  const resolvedImageUrl = absoluteUrl(imageUrl)!;
+  const resolvedImageUrl = absoluteUrl(imageUrl, site)!;
   if (/\/(?:g|img)\/509s?\.gif$/i.test(new URL(resolvedImageUrl).pathname)) {
     throw new Error("E-Hentai image quota exhausted; stop image requests and wait for quota recovery");
   }
 
-  const previousPageUrl = absoluteUrl($("a#prev[href*='/s/']").first().attr("href"));
-  const nextPageUrl = absoluteUrl($("a#next[href*='/s/']").first().attr("href"));
+  const previousPageUrl = absoluteUrl($("a#prev[href*='/s/']").first().attr("href"), site);
+  const nextPageUrl = absoluteUrl($("a#next[href*='/s/']").first().attr("href"), site);
 
   const showKey = /var\s+showkey\s*=\s*["']([0-9a-z]+)["']/i.exec(html)?.[1] ?? null;
   const skipHathKey = /onclick=["'][^"']*\bnl\(['"]([^'"]+)['"]\)/i.exec(html)?.[1] ?? null;
   const originalImageLink = $("a[href*='/fullimg/'], a[href*='fullimg.php']").first().attr("href");
 
   return {
-    imageUrl: absoluteUrl(imageUrl)!,
-    originalImageUrl: absoluteUrl(originalImageLink),
+    imageUrl: absoluteUrl(imageUrl, site)!,
+    originalImageUrl: absoluteUrl(originalImageLink, site),
     showKey,
     skipHathKey,
     nextPageUrl,
@@ -440,14 +457,15 @@ export function parseImagePage(html: string): ImagePageResult {
   };
 }
 
-export function parseGalleryPages(html: string): GalleryPagesResult {
+export function parseGalleryPages(html: string, site: EhSite = "e-hentai"): GalleryPagesResult {
   assertNotChallengePage(html);
   const $ = load(html);
   const totalMatch = $("#gdd").text().match(/Length:\s*(\d+)\s+pages?/i);
   if (!totalMatch) throw new Error("Could not determine the gallery page count");
 
   const pages = $("#gdt a[href*='/s/']").map((_, anchor) => {
-    const href = new URL($(anchor).attr("href")!, "https://e-hentai.org").toString();
+    const baseUrl = site === "exhentai" ? "https://exhentai.org" : "https://e-hentai.org";
+    const href = new URL($(anchor).attr("href")!, baseUrl).toString();
     const ref = parsePageUrl(href);
     const child = $(anchor).find("div").first();
     const style = child.attr("style") ?? "";

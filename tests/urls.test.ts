@@ -34,7 +34,9 @@ describe("URL handling", () => {
     expect(url.searchParams.get("f_cats")).toBe("1017");
     expect(url.searchParams.get("advsearch")).toBe("1");
     expect(url.searchParams.get("f_sto")).toBe("on");
+    expect(url.searchParams.get("f_sr")).toBe("on");
     expect(url.searchParams.get("f_srdd")).toBe("4");
+    expect(url.searchParams.get("f_sp")).toBe("on");
     expect(url.searchParams.get("f_spf")).toBe("20");
     expect(url.searchParams.get("f_spt")).toBe("80");
     expect(url.searchParams.get("next")).toBe("4000000");

@@ -4,6 +4,7 @@ import type { EhClient } from "./client.js";
 import type { EhSite, FavoritesOptions, GalleryRef, PageRef, SearchOptions } from "./types.js";
 import { parseGalleryPreviewUrl, parseGalleryUrl, parsePageUrl, siteFromUrl } from "./urls.js";
 import { buildStructuredSearchQuery, getSearchCapabilities } from "./search-tools.js";
+import { VERSION } from "./version.js";
 
 export interface EhBackend {
   getGalleryMetadata(entries: GalleryRef[], site?: EhSite): ReturnType<EhClient["getGalleryMetadata"]>;
@@ -11,6 +12,8 @@ export interface EhBackend {
   searchByHash(sha1: string, site?: EhSite): ReturnType<EhClient["searchByHash"]>;
   searchByFile(path: string, site?: EhSite): ReturnType<EhClient["searchByFile"]>;
   search(options: SearchOptions): ReturnType<EhClient["search"]>;
+  searchBatch(options: Parameters<EhClient["searchBatch"]>[0]): ReturnType<EhClient["searchBatch"]>;
+  searchWatched(options: SearchOptions): ReturnType<EhClient["searchWatched"]>;
   findSimilarGalleries(ref: GalleryRef, site?: EhSite): ReturnType<EhClient["findSimilarGalleries"]>;
   searchGalleryWorks(options: Parameters<EhClient["searchGalleryWorks"]>[0]): ReturnType<EhClient["searchGalleryWorks"]>;
   popular(site?: EhSite): ReturnType<EhClient["popular"]>;
@@ -132,6 +135,8 @@ const workSchema = z.object({
   creators: z.array(z.string()),
   availableLanguages: z.array(z.string()),
   groupingConfidence: z.enum(["high", "medium", "low"]),
+  groupingBasis: z.enum(["official-version-chain", "normalized-title-and-creator", "standalone"]),
+  groupingExplanation: z.string(),
   preferredGallery: workVariantSchema,
   variants: z.array(workVariantSchema),
 });
@@ -222,6 +227,7 @@ const detailOutputSchema = z.object({ result: z.object({
   gallery: z.object({
     gid: z.number().int(), token: z.string(), title: z.string(), titleJpn: z.string().nullable(), category: z.string(), uploader: z.string().nullable(), posted: z.string().nullable(), parent: gallerySchema.nullable(), visible: z.string().nullable(), language: z.string().nullable(), fileSize: z.string().nullable(), pages: z.number().int().nullable(), favoriteCount: z.number().int(), rating: z.number().nullable(), ratingCount: z.number().int().nullable(), torrentCount: z.number().int(),
   }),
+  description: z.object({ text: z.string(), untrusted: z.literal(true) }).nullable(),
   tagGroups: z.array(z.object({ namespace: z.string(), tags: z.array(z.object({ name: z.string(), strength: z.enum(["solid", "weak", "active"]) })) })),
   newerVersions: z.array(gallerySchema.extend({ title: z.string(), added: z.string() })),
 }) });
@@ -285,7 +291,7 @@ function toolError(error: unknown) {
 }
 
 export function createServer(backend: EhBackend): McpServer {
-  const server = new McpServer({ name: "eh-index-mcp", version: "0.1.0" });
+  const server = new McpServer({ name: "eh-index-mcp", version: VERSION });
 
   server.registerTool(
     "eh_search_galleries",
@@ -304,6 +310,57 @@ export function createServer(backend: EhBackend): McpServer {
     async (input) => {
       try {
         return success("result", await backend.search(input));
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "eh_search_galleries_batch",
+    {
+      title: "Search galleries across pages",
+      description: "Search up to 10 result pages without metadata expansion, deduplicate gallery references, and return a resume cursor when the page budget truncates the scan.",
+      inputSchema: z.object({
+        ...searchInputShape,
+        maxPages: z.number().int().min(1).max(10).default(5).describe("Maximum result pages to scan"),
+        next: z.string().optional().describe("Resume cursor returned by a previous truncated batch search"),
+      }),
+      outputSchema: z.object({ result: z.object({
+        galleries: z.array(gallerySummarySchema),
+        pagesScanned: z.number().int().positive(),
+        resultCount: z.number().int().nonnegative(),
+        truncated: z.boolean(),
+        next: z.string().nullable(),
+      }) }),
+      annotations,
+    },
+    async (input) => {
+      try {
+        return success("result", await backend.searchBatch(input));
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "eh_search_watched",
+    {
+      title: "Search watched-tag galleries",
+      description: "Read the authenticated user's watched-tag gallery feed with native search, category, advanced-filter, and cursor controls. This tool never changes watched tags or account settings.",
+      inputSchema: z.object({
+        ...searchInputShape,
+        prev: z.string().optional().describe("Previous-page cursor returned by this tool"),
+        next: z.string().optional().describe("Next-page cursor returned by this tool"),
+        seek: z.string().optional().describe("E-Hentai seek value, such as a date or gallery ID"),
+      }),
+      outputSchema: galleryListOutputSchema,
+      annotations,
+    },
+    async (input) => {
+      try {
+        return success("result", await backend.searchWatched(input));
       } catch (error) {
         return toolError(error);
       }
@@ -472,7 +529,7 @@ export function createServer(backend: EhBackend): McpServer {
     "eh_get_gallery_detail",
     {
       title: "Get detailed gallery information",
-      description: "Read gallery detail fields, grouped tags with strength, rating statistics, parent link, and newer gallery versions.",
+      description: "Read gallery detail fields, grouped tags with strength, rating statistics, parent/newer versions, and the uploader-provided gallery description as untrusted text.",
       inputSchema: z.object({
         site: siteSchema.default("e-hentai"),
         gallery: gallerySchema.optional(),

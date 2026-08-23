@@ -9,6 +9,7 @@ import { extractSimilarGalleryTitle, extractTitleParts } from "./gallery-title.j
 
 const CREATOR_NAMESPACES = new Set(["group", "artist", "cosplayer"]);
 const LANGUAGE_PREFIX = "language:";
+type GroupingBasis = GalleryWork["groupingBasis"];
 const EDITION_SUFFIXES = new Set([
   "digital", "translated", "rewrite", "colorized", "decensored", "uncensored",
   "chinese", "english", "korean", "spanish", "portuguese-br", "russian", "french", "german",
@@ -132,7 +133,7 @@ export function organizeGalleryWorks(metadata: GalleryMetadata[], site: EhSite):
     officialKeys.set(refKey(currentGid, entry.current_key), official);
   }
 
-  const workGroups = new Map<string, { identity: ReturnType<typeof workIdentity>; creators: string[]; creatorAliases: string[]; preferredGid: number | null; variants: GalleryWorkVariant[] }>();
+  const workGroups = new Map<string, { identity: ReturnType<typeof workIdentity>; creators: string[]; creatorAliases: string[]; preferredGid: number | null; variants: GalleryWorkVariant[]; basis: GroupingBasis }>();
 
   for (const entry of valid) {
     const title = entry.title ?? entry.title_jpn!;
@@ -147,7 +148,16 @@ export function organizeGalleryWorks(metadata: GalleryMetadata[], site: EhSite):
       && aliases.length > 0
       && sharesCreator(candidate.creatorAliases, aliases));
     const key = official?.key ?? related?.[0] ?? `${creators.join("|") || `gid:${entry.gid}`}::${titleKey}`;
-    const group = workGroups.get(key) ?? { identity, creators, creatorAliases: aliases, preferredGid: official?.preferredGid ?? null, variants: [] };
+    const group = workGroups.get(key) ?? {
+      identity,
+      creators,
+      creatorAliases: aliases,
+      preferredGid: official?.preferredGid ?? null,
+      variants: [],
+      basis: official ? "official-version-chain" : related ? "normalized-title-and-creator" : "standalone",
+    };
+    if (official) group.basis = "official-version-chain";
+    else if (related && group.basis === "standalone") group.basis = "normalized-title-and-creator";
     group.creators = mergeCreators(group.creators, creators);
     group.creatorAliases = mergeCreators(group.creatorAliases, aliases);
     if (official && Number(entry.gid) === official.preferredGid) {
@@ -167,6 +177,12 @@ export function organizeGalleryWorks(metadata: GalleryMetadata[], site: EhSite):
       creators: group.creators,
       availableLanguages,
       groupingConfidence: group.creators.length > 0 ? "high" : group.variants.length > 1 ? "medium" : "low",
+      groupingBasis: group.basis,
+      groupingExplanation: group.basis === "official-version-chain"
+        ? "Grouped using official current-version links from E-Hentai metadata."
+        : group.basis === "normalized-title-and-creator"
+          ? "Grouped using a normalized title and shared creator tags; this is heuristic."
+          : "Kept as a standalone work because no official version chain or creator-backed title match was found.",
       preferredGallery: preferredVariant(group.variants, group.preferredGid),
       variants: group.variants.sort((left, right) => right.gid - left.gid),
     };

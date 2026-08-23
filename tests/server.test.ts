@@ -47,8 +47,10 @@ describe("MCP server", () => {
       "eh_search_by_hash",
       "eh_search_favorites",
       "eh_search_galleries",
+      "eh_search_galleries_batch",
       "eh_search_gallery_works",
       "eh_search_translated_tags",
+      "eh_search_watched",
     ]);
     expect(tools.tools.every((tool) => tool.annotations?.readOnlyHint === true)).toBe(true);
     expect(tools.tools.every((tool) => tool.outputSchema !== undefined)).toBe(true);
@@ -76,6 +78,24 @@ describe("MCP server", () => {
     const result = await client.callTool({ name: "eh_check_access", arguments: { site: "e-hentai" } });
     expect(result.isError).toBe(true);
     expect(result.content).toEqual([{ type: "text", text: "diagnostic failed" }]);
+  });
+
+  it("advertises gallery descriptions as untrusted structured detail content", async () => {
+    const server = createServer({} as never);
+    const client = new Client({ name: "test-client", version: "1.0.0" });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeables.push(client, server);
+
+    const tools = await client.listTools();
+    const detail = tools.tools.find((tool) => tool.name === "eh_get_gallery_detail");
+    const outputSchema = detail?.outputSchema as {
+      properties?: { result?: { properties?: { description?: unknown } } };
+    };
+    const descriptionSchema = outputSchema.properties?.result?.properties?.description;
+    expect(descriptionSchema).toBeDefined();
+    expect(JSON.stringify(descriptionSchema)).toContain('"untrusted"');
   });
 
   it("routes the extended read-only tools and returns structured content", async () => {
@@ -181,6 +201,8 @@ describe("MCP server", () => {
           creators: ["group:syukurin"],
           availableLanguages: ["chinese"],
           groupingConfidence: "high" as const,
+          groupingBasis: "normalized-title-and-creator" as const,
+          groupingExplanation: "Grouped using a normalized title and shared creator tags; this is heuristic.",
           preferredGallery: { gid: 1, token: "123456789a", url: "https://e-hentai.org/g/1/123456789a/", title: "Title", titleJpn: null, category: "Doujinshi", posted: null, pages: 50, rating: 4.5, languages: [] },
           variants: [],
         }],
@@ -198,6 +220,54 @@ describe("MCP server", () => {
 
     expect(response.structuredContent).toEqual({ result });
     expect(backend.searchGalleryWorks).toHaveBeenCalledWith(expect.objectContaining({ site: "e-hentai", query: "test", maxPages: 2 }));
+  });
+
+  it("routes authenticated watched-tag searches", async () => {
+    const result = { galleries: [], prev: null, next: "cursor-2" };
+    const backend = { searchWatched: vi.fn(async () => result) };
+    const server = createServer(backend as never);
+    const client = new Client({ name: "test-client", version: "1.0.0" });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeables.push(client, server);
+
+    const response = await client.callTool({
+      name: "eh_search_watched",
+      arguments: { site: "exhentai", query: "language:chinese$", minRating: 4, next: "cursor-1" },
+    });
+
+    expect(response.structuredContent).toEqual({ result });
+    expect(backend.searchWatched).toHaveBeenCalledWith(expect.objectContaining({
+      site: "exhentai",
+      query: "language:chinese$",
+      minRating: 4,
+      next: "cursor-1",
+    }));
+  });
+
+  it("routes controlled multi-page gallery searches", async () => {
+    const result = { galleries: [], pagesScanned: 2, resultCount: 0, truncated: true, next: "cursor-3" };
+    const backend = { searchBatch: vi.fn(async () => result) };
+    const server = createServer(backend as never);
+    const client = new Client({ name: "test-client", version: "1.0.0" });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeables.push(client, server);
+
+    const response = await client.callTool({
+      name: "eh_search_galleries_batch",
+      arguments: { site: "exhentai", query: "test", maxPages: 2, next: "cursor-1" },
+    });
+
+    expect(response.structuredContent).toEqual({ result });
+    expect(backend.searchBatch).toHaveBeenCalledWith(expect.objectContaining({
+      site: "exhentai",
+      query: "test",
+      maxPages: 2,
+      next: "cursor-1",
+    }));
   });
 
   it("routes EhViewer-compatible similar gallery searches", async () => {
