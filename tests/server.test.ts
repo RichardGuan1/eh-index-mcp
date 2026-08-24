@@ -52,8 +52,28 @@ describe("MCP server", () => {
       "eh_search_translated_tags",
       "eh_search_watched",
     ]);
+    expect(tools.tools.every((tool) => Boolean(tool.annotations))).toBe(true);
     expect(tools.tools.every((tool) => tool.annotations?.readOnlyHint === true)).toBe(true);
+    expect(tools.tools.every((tool) => tool.annotations?.destructiveHint === false)).toBe(true);
+    expect(tools.tools.every((tool) => tool.annotations?.idempotentHint === true)).toBe(true);
     expect(tools.tools.every((tool) => tool.outputSchema !== undefined)).toBe(true);
+
+    const descriptions = new Map(tools.tools.map((tool) => [tool.name, tool.description ?? ""]));
+    expect(descriptions.get("eh_search_galleries")).toContain("eh_search_translated_tags");
+    expect(descriptions.get("eh_get_popular")).toContain("base URL");
+    expect(descriptions.get("eh_get_gallery_metadata")).toContain("eh_get_gallery_detail");
+    expect(descriptions.get("eh_get_gallery_detail")).toContain("eh_get_gallery_comments");
+    expect(descriptions.get("eh_get_gallery_detail")).toContain("eh_get_torrents");
+    expect(descriptions.get("eh_get_gallery_chain")).toContain("tool errors");
+    expect(descriptions.get("eh_find_latest_gallery_version")).toContain("eh_get_gallery_chain");
+
+    const missingInputDescriptions = tools.tools.flatMap((tool) => {
+      const inputSchema = tool.inputSchema as { properties?: Record<string, { description?: string }> };
+      return Object.entries(inputSchema.properties ?? {})
+        .filter(([, schema]) => !schema.description)
+        .map(([name]) => `${tool.name}.${name}`);
+    });
+    expect(missingInputDescriptions).toEqual([]);
 
     const result = await client.callTool({
       name: "eh_get_gallery_metadata",
