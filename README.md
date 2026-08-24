@@ -266,10 +266,20 @@ If Node.js 24 or newer reaches E-Hentai through an HTTP proxy, pass `HTTP_PROXY`
 ```bash
 npm install
 npm run check
+npm run pack:smoke
 npm run smoke
 ```
 
-`npm run check` builds the project and runs the automated test suite. `npm run smoke` exercises the built stdio server against a small public live-data workflow without downloading gallery images or torrent files.
+`npm run check` builds the project and runs the automated test suite. `npm run pack:smoke` installs a local tarball in a temporary directory and verifies stdio initialization, the tool list, output schemas, and read-only annotations. `npm run smoke` exercises the built stdio server against a small public live-data workflow without downloading gallery images or torrent files.
+
+The repository also includes a multi-stage `Dockerfile` for a production Node.js image. Build and start it with:
+
+```bash
+docker build -t eh-index-mcp .
+docker run --rm -i eh-index-mcp
+```
+
+The container communicates over stdio and accepts the same optional cookie and tuning environment variables as the native Node.js process.
 
 An optional authenticated smoke test is available for maintainers with existing cookies:
 

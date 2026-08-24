@@ -266,10 +266,20 @@ Node.js 24 或更高版本通过 HTTP 代理访问 E-Hentai 时，请向服务�
 ```bash
 npm install
 npm run check
+npm run pack:smoke
 npm run smoke
 ```
 
-`npm run check` 会构建项目并运行自动化测试。`npm run smoke` 会使用少量公开实时数据测试已构建的 stdio 服务，不下载画廊图片或种子文件。
+`npm run check` 会构建项目并运行自动化测试。`npm run pack:smoke` 会在临时目录安装本地 tarball，并验证 stdio 初始化、工具列表、输出 schema 和只读 annotation。`npm run smoke` 会使用少量公开实时数据测试已构建的 stdio 服务，不下载画廊图片或种子文件。
+
+仓库还提供用于生产 Node.js 镜像的多阶段 `Dockerfile`。构建并启动容器：
+
+```bash
+docker build -t eh-index-mcp .
+docker run --rm -i eh-index-mcp
+```
+
+容器通过 stdio 通信，并接受与原生 Node.js 进程相同的可选 Cookie 和调优环境变量。
 
 维护者可在已有 Cookie 的情况下运行可选的认证测试：
 

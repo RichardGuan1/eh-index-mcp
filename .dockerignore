@@ -1,0 +1,15 @@
+node_modules
+dist
+.git
+.github
+.env
+*.log
+tests
+scripts
+assets
+README.md
+README.zh-CN.md
+CHANGELOG.md
+THIRD_PARTY_NOTICES.md
+server.json
+glama.json

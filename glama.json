@@ -1,0 +1,26 @@
+{
+  "$schema": "https://glama.ai/mcp/schemas/server.json",
+  "maintainers": [
+    "RichardGuan1"
+  ],
+  "name": "EH Index MCP",
+  "description": "A read-only MCP server for searching and exploring E-Hentai and ExHentai galleries, metadata, version chains, image pages, and translated tags.",
+  "version": "0.1.2",
+  "type": "mcp_server",
+  "status": "production",
+  "transport": [
+    "stdio"
+  ],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "e-hentai",
+    "exhentai",
+    "gallery",
+    "metadata",
+    "version-chain",
+    "image-pages",
+    "tag-translation",
+    "read-only"
+  ]
+}
