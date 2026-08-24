@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.2] - 2026-08-24
+
+### Fixed
+
+- Preserved ExHentai host context when parsing the popular gallery list.
+- Restored gallery metadata to caller input order even when the upstream API reorders unique rows.
+- Made creator-backed gallery-work grouping deterministic and merged bridged candidate groups transitively.
+- Rejected login pages at the shared HTML parser boundary instead of returning misleading empty results.
+- Classified rejected credentials as reachable but unauthenticated in access diagnostics.
+
+### Quality
+
+- Added regression coverage for reordered metadata, ExHentai popular links, expired login pages, and read-only MCP annotations.
+- Added a packaged stdio initialize/tools-list smoke check for release artifacts.
+- Added descriptions to every top-level input parameter exposed in the 30-tool MCP schemas, with a regression test that rejects undocumented parameters.
+- Added `glama.json` ownership and catalog metadata for Glama discovery and maintenance.
+- Added a multi-stage production Dockerfile with a non-root Node.js runtime and a Docker build gate in CI.
+
 ## [0.1.1] - 2026-08-24
 
 ### Added

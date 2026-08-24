@@ -1,6 +1,6 @@
 {
   "name": "eh-index-mcp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "mcpName": "io.github.RichardGuan1/eh-index-mcp",
   "description": "Read-only MCP server for E-Hentai and ExHentai",
   "keywords": [
