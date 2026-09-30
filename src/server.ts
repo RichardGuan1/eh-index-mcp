@@ -939,5 +939,35 @@ export function createServer(backend: EhBackend): McpServer {
     },
   );
 
+  server.registerPrompt(
+    "eh_gallery_research",
+    {
+      title: "Research E-Hentai galleries",
+      description: "Guide a read-only gallery research workflow using search, metadata, details, comments, and torrents.",
+      argsSchema: z.object({
+        site: siteSchema.default("e-hentai").describe("Target site: e-hentai or exhentai"),
+        query: z.string().max(200).describe("Native E-Hentai search query"),
+        goal: z.string().max(500).describe("What the research should establish"),
+      }),
+    },
+    ({ site, query, goal }) => ({
+      messages: [{
+        role: "user" as const,
+        content: {
+          type: "text" as const,
+          text: [
+            `Research goal: ${goal}`,
+            `Target site: ${site}`,
+            `Search query: ${query}`,
+            "Use the read-only workflow: call eh_search_galleries first, then pass the returned site, gid, and token together into eh_get_gallery_metadata or eh_get_gallery_metadata_batch.",
+            "Use eh_get_gallery_detail for page-level fields, eh_get_gallery_comments for comments, and eh_get_torrents for torrent records only when they serve the goal.",
+            "Preserve gallery references exactly as (site, gid, token); do not infer the site from a URL when the structured site field is available.",
+            "Report uncertainty, deleted or expunged galleries, authentication errors, and rate limits explicitly.",
+          ].join("\\n\\n"),
+        },
+      }],
+    }),
+  );
+
   return server;
 }

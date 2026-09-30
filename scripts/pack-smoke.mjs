@@ -51,6 +51,21 @@ try {
     && tool.outputSchema)) {
     throw new Error("Packed server exposed an invalid read-only tool contract");
   }
+  const prompts = await client.listPrompts();
+  if (!prompts.prompts.some((prompt) => prompt.name === "eh_gallery_research")) {
+    throw new Error("Packed server did not advertise the gallery research prompt");
+  }
+  const renderedPrompt = await client.getPrompt({
+    name: "eh_gallery_research",
+    arguments: { site: "exhentai", query: "language:chinese$", goal: "find matching galleries" },
+  });
+  const promptText = renderedPrompt.messages[0]?.content?.type === "text"
+    ? renderedPrompt.messages[0].content.text
+    : "";
+  if (!promptText.includes("eh_search_galleries") || !promptText.includes("exhentai")) {
+    throw new Error("Packed server rendered an invalid gallery research prompt");
+  }
+
   const query = await client.callTool({
     name: "eh_build_search_query",
     arguments: { includeTags: ["language:chinese"], exactTags: true },

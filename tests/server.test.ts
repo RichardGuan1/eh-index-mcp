@@ -98,6 +98,31 @@ describe("MCP server", () => {
     expect(batchResult.structuredContent).toEqual(await backend.getGalleryMetadataBatch.mock.results[0]!.value);
   });
 
+  it("advertises and renders the gallery research prompt", async () => {
+    const server = createServer({} as never);
+    const client = new Client({ name: "test-client", version: "1.0.0" });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeables.push(client, server);
+
+    const prompts = await client.listPrompts();
+    expect(prompts.prompts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "eh_gallery_research" }),
+    ]));
+    const prompt = await client.getPrompt({
+      name: "eh_gallery_research",
+      arguments: { site: "exhentai", query: "language:chinese$", goal: "find the best matching gallery" },
+    });
+    const text = prompt.messages[0]?.content;
+    expect(text).toEqual({
+      type: "text",
+      text: expect.stringContaining("eh_search_galleries"),
+    });
+    expect((text as { text: string }).text).toContain("exhentai");
+    expect((text as { text: string }).text).toContain("language:chinese$");
+    expect((text as { text: string }).text).toContain("gid");
+  });
   it("returns check-access backend failures as MCP tool errors", async () => {
     const backend = {
       checkAccess: vi.fn(async () => { throw new Error("diagnostic failed"); }),
