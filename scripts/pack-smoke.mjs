@@ -12,6 +12,7 @@ const expectedVersion = JSON.parse(await readFile(join(root, "package.json"), "u
 const npmCli = process.env.npm_execpath;
 if (!npmCli) throw new Error("npm_execpath is unavailable; run this script through npm run pack:smoke");
 const runNpm = (args, options) => execFileSync(process.execPath, [npmCli, ...args], options);
+let client;
 
 try {
   const packed = JSON.parse(runNpm(["pack", "--json", "--pack-destination", work], {
@@ -40,7 +41,7 @@ try {
     env: { ...inherited, EH_MEMBER_ID: "", EH_PASS_HASH: "", EH_IGNEOUS: "" },
     stderr: "pipe",
   });
-  const client = new Client({ name: "eh-index-mcp-pack-smoke", version: "1.0.0" });
+  client = new Client({ name: "eh-index-mcp-pack-smoke", version: "1.0.0" });
   await client.connect(transport);
   const tools = await client.listTools();
   if (tools.tools.length !== 30) throw new Error(`Packed server exposed ${tools.tools.length} tools`);
@@ -50,8 +51,31 @@ try {
     && tool.outputSchema)) {
     throw new Error("Packed server exposed an invalid read-only tool contract");
   }
-  await client.close();
-  console.log("pack smoke passed: stdio initialize/tools-list, 30 read-only tools");
+  const query = await client.callTool({
+    name: "eh_build_search_query",
+    arguments: { includeTags: ["language:chinese"], exactTags: true },
+  });
+  if (query.isError || query.structuredContent?.result?.query !== "language:chinese$") {
+    throw new Error("Packed server returned an invalid structured query result");
+  }
+
+  const access = await client.callTool({
+    name: "eh_get_popular",
+    arguments: { site: "exhentai" },
+  });
+  if (
+    access.isError !== true
+    || access.content?.[0]?.text !== "ExHentai requires EH_MEMBER_ID, EH_PASS_HASH, and EH_IGNEOUS credentials"
+    || access.structuredContent?.error?.code !== "AUTH_REQUIRED"
+    || access.structuredContent?.error?.site !== "exhentai"
+  ) {
+    throw new Error("Packed server returned an invalid structured authentication error");
+  }
+  console.log("pack smoke passed: stdio initialize/tools-list/tools-call, 30 read-only tools");
 } finally {
-  await rm(work, { recursive: true, force: true });
+  try {
+    await client?.close();
+  } finally {
+    await rm(work, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
 }
