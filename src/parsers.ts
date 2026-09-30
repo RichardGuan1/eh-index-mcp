@@ -118,6 +118,7 @@ function parseGalleryRow($: CheerioAPI, element: unknown, site: EhSite): Gallery
 
   return {
     ...ref,
+    site,
     url: new URL(href, baseUrl).toString(),
     title,
     category: row.find(".cn, .cs").first().text().trim(),

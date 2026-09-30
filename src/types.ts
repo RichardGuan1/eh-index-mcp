@@ -83,6 +83,7 @@ export interface FavoriteDetailResult {
 }
 
 export interface GallerySummary extends GalleryRef {
+  site: EhSite;
   url: string;
   title: string;
   category: string;
@@ -349,6 +350,7 @@ export interface GalleryVersionComparison {
 }
 
 export interface GalleryWorkVariant extends GalleryRef {
+  site: EhSite;
   url: string;
   title: string;
   titleJpn: string | null;

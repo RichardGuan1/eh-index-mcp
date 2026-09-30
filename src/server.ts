@@ -50,6 +50,7 @@ const pageSchema = z.object({
   page: z.number().int().positive().describe("One-based page number"),
 });
 const gallerySummarySchema = gallerySchema.extend({
+  site: siteSchema,
   url: z.string().url(),
   title: z.string(),
   category: z.string(),
@@ -121,6 +122,7 @@ const similarGalleryOutputSchema = z.object({ result: z.object({
   result: galleryListSchema,
 }) });
 const workVariantSchema = gallerySchema.extend({
+  site: siteSchema,
   url: z.string().url(),
   title: z.string(),
   titleJpn: z.string().nullable(),

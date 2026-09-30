@@ -29,6 +29,7 @@ describe("gallery work organization", () => {
     expect(syukurin?.works).toHaveLength(2);
     expect(syukurin?.works.map((work) => work.installment)).toEqual(["9", "10"]);
     expect(syukurin?.works.find((work) => work.installment === "10")?.variants).toHaveLength(3);
+    expect(syukurin?.works.find((work) => work.installment === "10")?.variants.every((variant) => variant.site === "e-hentai")).toBe(true);
     expect(syukurin?.works.find((work) => work.installment === "10")?.availableLanguages).toEqual(["chinese", "english"]);
     expect(syukurin?.works.find((work) => work.installment === "10")?.groupingBasis).toBe("normalized-title-and-creator");
     expect(syukurin?.works.find((work) => work.installment === "10")?.groupingExplanation)

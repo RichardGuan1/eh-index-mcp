@@ -55,6 +55,7 @@ describe("HTML parsers", () => {
       expect.objectContaining({
         gid: 4122220,
         token: "123456789a",
+        site: "e-hentai",
         title: "Sample & Title",
         category: "Doujinshi",
         uploader: "TestUser",

@@ -277,7 +277,7 @@ describe("MCP server", () => {
           groupingConfidence: "high" as const,
           groupingBasis: "normalized-title-and-creator" as const,
           groupingExplanation: "Grouped using a normalized title and shared creator tags; this is heuristic.",
-          preferredGallery: { gid: 1, token: "123456789a", url: "https://e-hentai.org/g/1/123456789a/", title: "Title", titleJpn: null, category: "Doujinshi", posted: null, pages: 50, rating: 4.5, languages: [] },
+          preferredGallery: { gid: 1, token: "123456789a", site: "e-hentai", url: "https://e-hentai.org/g/1/123456789a/", title: "Title", titleJpn: null, category: "Doujinshi", posted: null, pages: 50, rating: 4.5, languages: [] },
           variants: [],
         }],
       }],

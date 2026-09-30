@@ -100,6 +100,7 @@ function toVariant(metadata: GalleryMetadata, site: EhSite): GalleryWorkVariant 
   return {
     gid: Number(metadata.gid),
     token: metadata.token!,
+    site,
     url: `https://${host}/g/${metadata.gid}/${metadata.token}/`,
     title: metadata.title ?? metadata.title_jpn ?? `Gallery ${metadata.gid}`,
     titleJpn: metadata.title_jpn ?? null,
