@@ -11,3 +11,24 @@ export const pageSchema = z.object({
   pageToken: z.string().regex(/^[0-9a-f]{10}$/i).describe("10-character image-page token"),
   page: z.number().int().positive().describe("One-based page number"),
 });
+
+export const annotations = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: true,
+};
+
+export const searchInputShape = {
+  site: siteInput,
+  query: z.string().max(200).optional().describe("Native E-Hentai query, e.g. language:chinese$ artist:name$"),
+  categories: z.array(z.enum(["misc", "doujinshi", "manga", "artist-cg", "game-cg", "western", "non-h", "image-set", "cosplay", "asian-porn"])).max(10).optional().describe("Gallery categories to include; omit to use all categories"),
+  minRating: z.number().int().min(2).max(5).optional().describe("Minimum rating from 2 through 5"),
+  pageFrom: z.number().int().positive().optional().describe("One-based first result page to scan"),
+  pageTo: z.number().int().positive().optional().describe("One-based last result page to scan"),
+  hasTorrent: z.boolean().optional().describe("When true, require galleries with torrent metadata"),
+  browseExpunged: z.boolean().optional().describe("When true, include expunged galleries where supported"),
+  disableLanguageFilter: z.boolean().optional().describe("Disable the site's default language filtering"),
+  disableUploaderFilter: z.boolean().optional().describe("Disable the site's default uploader filtering"),
+  disableTagFilter: z.boolean().optional().describe("Disable the site's default tag filtering"),
+};

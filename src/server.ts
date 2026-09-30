@@ -7,7 +7,7 @@ import { buildStructuredSearchQuery, getSearchCapabilities } from "./search-tool
 import { VERSION } from "./version.js";
 import { registerPrompts } from "./server/prompts.js";
 import { success, successValue, toolError } from "./server/helpers.js";
-import { siteSchema, siteInput, gallerySchema, pageSchema } from "./server/schemas.js";
+import { siteSchema, siteInput, gallerySchema, pageSchema, annotations, searchInputShape } from "./server/schemas.js";
 
 export interface EhBackend {
   getGalleryMetadata(entries: GalleryRef[], site?: EhSite): ReturnType<EhClient["getGalleryMetadata"]>;
@@ -265,26 +265,6 @@ const capabilitiesOutputSchema = z.object({ result: z.object({
   operators: z.array(z.string()), namespaces: z.array(z.string()), qualifiers: z.array(z.string()), categories: z.array(z.string()),
   limits: z.object({ maxQueryLength: z.number().int(), maxInclusions: z.number().int(), maxExclusions: z.number().int(), minimumIntervalMs: z.number().int() }),
 }) });
-const annotations = {
-  readOnlyHint: true,
-  destructiveHint: false,
-  idempotentHint: true,
-  openWorldHint: true,
-};
-const searchInputShape = {
-  site: siteInput,
-  query: z.string().max(200).optional().describe("Native E-Hentai query, e.g. language:chinese$ artist:name$"),
-  categories: z.array(z.enum(["misc", "doujinshi", "manga", "artist-cg", "game-cg", "western", "non-h", "image-set", "cosplay", "asian-porn"])).max(10).optional().describe("Gallery categories to include; omit to use all categories"),
-  minRating: z.number().int().min(2).max(5).optional().describe("Minimum rating from 2 through 5"),
-  pageFrom: z.number().int().positive().optional().describe("One-based first result page to scan"),
-  pageTo: z.number().int().positive().optional().describe("One-based last result page to scan"),
-  hasTorrent: z.boolean().optional().describe("When true, require galleries with torrent metadata"),
-  browseExpunged: z.boolean().optional().describe("When true, include expunged galleries where supported"),
-  disableLanguageFilter: z.boolean().optional().describe("Disable the site's default language filtering"),
-  disableUploaderFilter: z.boolean().optional().describe("Disable the site's default uploader filtering"),
-  disableTagFilter: z.boolean().optional().describe("Disable the site's default tag filtering"),
-};
-
 export function createServer(backend: EhBackend): McpServer {
   const server = new McpServer({ name: "eh-index-mcp", version: VERSION });
 
