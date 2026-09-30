@@ -7,6 +7,7 @@ import { buildStructuredSearchQuery, getSearchCapabilities } from "./search-tool
 import { VERSION } from "./version.js";
 import { registerPrompts } from "./server/prompts.js";
 import { success, successValue, toolError } from "./server/helpers.js";
+import { siteSchema, siteInput, gallerySchema, pageSchema } from "./server/schemas.js";
 
 export interface EhBackend {
   getGalleryMetadata(entries: GalleryRef[], site?: EhSite): ReturnType<EhClient["getGalleryMetadata"]>;
@@ -39,17 +40,6 @@ export interface EhBackend {
   searchTranslatedTags(query: string, limit?: number): ReturnType<EhClient["searchTranslatedTags"]>;
 }
 
-const siteSchema = z.enum(["e-hentai", "exhentai"]);
-const siteInput = siteSchema.default("e-hentai").describe("Target site; gallery URLs override this when a URL is provided");
-const gallerySchema = z.object({
-  gid: z.number().int().positive().describe("Gallery ID"),
-  token: z.string().regex(/^[0-9a-f]{10}$/i).describe("10-character gallery token"),
-});
-const pageSchema = z.object({
-  gid: z.number().int().positive().describe("Gallery ID"),
-  pageToken: z.string().regex(/^[0-9a-f]{10}$/i).describe("10-character image-page token"),
-  page: z.number().int().positive().describe("One-based page number"),
-});
 const gallerySummarySchema = gallerySchema.extend({
   site: siteSchema,
   url: z.string().url(),
