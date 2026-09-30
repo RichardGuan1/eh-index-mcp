@@ -5,8 +5,8 @@ import type { EhSite, FavoritesOptions, GalleryRef, PageRef, SearchOptions } fro
 import { parseGalleryPreviewUrl, parseGalleryUrl, parsePageUrl, siteFromUrl } from "./urls.js";
 import { buildStructuredSearchQuery, getSearchCapabilities } from "./search-tools.js";
 import { VERSION } from "./version.js";
-import { ehErrorFromUnknown } from "./errors.js";
 import { registerPrompts } from "./server/prompts.js";
+import { success, successValue, toolError } from "./server/helpers.js";
 
 export interface EhBackend {
   getGalleryMetadata(entries: GalleryRef[], site?: EhSite): ReturnType<EhClient["getGalleryMetadata"]>;
@@ -294,30 +294,6 @@ const searchInputShape = {
   disableUploaderFilter: z.boolean().optional().describe("Disable the site's default uploader filtering"),
   disableTagFilter: z.boolean().optional().describe("Disable the site's default tag filtering"),
 };
-
-function success(key: string, value: unknown) {
-  const structuredContent = { [key]: value };
-  return {
-    content: [{ type: "text" as const, text: JSON.stringify(structuredContent) }],
-    structuredContent,
-  };
-}
-
-function toolError(error: unknown) {
-  const typed = ehErrorFromUnknown(error);
-  return {
-    content: [{ type: "text" as const, text: typed.message }],
-    structuredContent: { error: typed.toJSON() },
-    isError: true as const,
-  };
-}
-
-function successValue(value: unknown) {
-  return {
-    content: [{ type: "text" as const, text: JSON.stringify(value) }],
-    structuredContent: value,
-  };
-}
 
 export function createServer(backend: EhBackend): McpServer {
   const server = new McpServer({ name: "eh-index-mcp", version: VERSION });
