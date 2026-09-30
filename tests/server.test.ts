@@ -12,6 +12,13 @@ describe("MCP server", () => {
   it("advertises the read-only tool surface and calls gallery metadata", async () => {
     const backend = {
       getGalleryMetadata: vi.fn(async () => [{ gid: 123, token: "123456789a", title: "Test gallery" }]),
+      getGalleryMetadataBatch: vi.fn(async () => ({
+        galleries: [{ gid: 123, token: "123456789a", title: "Test gallery" }],
+        inputCount: 1,
+        successCount: 1,
+        errorCount: 0,
+        preservedOrder: true as const,
+      })),
     };
     const server = createServer(backend as never);
     const client = new Client({ name: "test-client", version: "1.0.0" });
@@ -83,6 +90,12 @@ describe("MCP server", () => {
     expect(result.structuredContent).toEqual({
       galleries: [{ gid: 123, token: "123456789a", title: "Test gallery" }],
     });
+
+    const batchResult = await client.callTool({
+      name: "eh_get_gallery_metadata_batch",
+      arguments: { galleries: [{ gid: 123, token: "123456789a" }] },
+    });
+    expect(batchResult.structuredContent).toEqual(await backend.getGalleryMetadataBatch.mock.results[0]!.value);
   });
 
   it("returns check-access backend failures as MCP tool errors", async () => {
@@ -157,7 +170,13 @@ describe("MCP server", () => {
     const page = { gid: 123, pageToken: "abcdef1234", page: 1 };
     const gallery = { gid: 123, token: "123456789a" };
     const backend = {
-      resolveGalleryTokensBatch: vi.fn(async () => [{ ...page, token: gallery.token }]),
+      resolveGalleryTokensBatch: vi.fn(async () => ({
+        results: [{ ...page, token: gallery.token }],
+        inputCount: 1,
+        successCount: 1,
+        errorCount: 0,
+        preservedOrder: true as const,
+      })),
       getFavoriteCategories: vi.fn(async () => ({
         total: 1,
         selected: "all" as const,
@@ -209,7 +228,7 @@ describe("MCP server", () => {
     closeables.push(client, server);
 
     const batch = await client.callTool({ name: "eh_resolve_gallery_batch", arguments: { pages: [page] } });
-    expect(batch.structuredContent).toEqual({ results: [{ ...page, token: gallery.token }] });
+    expect(batch.structuredContent).toEqual(await backend.resolveGalleryTokensBatch.mock.results[0]!.value);
 
     const categories = await client.callTool({ name: "eh_get_favorite_categories", arguments: {} });
     expect(categories.structuredContent).toEqual({ result: await backend.getFavoriteCategories.mock.results[0]!.value });
@@ -302,7 +321,7 @@ describe("MCP server", () => {
   });
 
   it("routes controlled multi-page gallery searches", async () => {
-    const result = { galleries: [], pagesScanned: 2, resultCount: 0, truncated: true, next: "cursor-3" };
+    const result = { galleries: [], inputCount: 0, pagesScanned: 2, resultCount: 0, errorCount: 0 as const, preservedOrder: true as const, truncated: true, next: "cursor-3" };
     const backend = { searchBatch: vi.fn(async () => result) };
     const server = createServer(backend as never);
     const client = new Client({ name: "test-client", version: "1.0.0" });

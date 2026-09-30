@@ -19,8 +19,11 @@ const summary = (gid: number): GallerySummary => ({
 type BatchSearchOptions = SearchOptions & { maxPages?: number };
 type BatchSearchResult = {
   galleries: GallerySummary[];
+  inputCount: number;
   pagesScanned: number;
   resultCount: number;
+  errorCount: 0;
+  preservedOrder: true;
   truncated: boolean;
   next: string | null;
 };
@@ -41,8 +44,11 @@ describe("multi-page gallery search", () => {
     expect(search).toHaveBeenNthCalledWith(2, { site: "exhentai", query: "test", next: "cursor-2" });
     expect(result).toEqual({
       galleries: [summary(1), summary(2), summary(3)],
+      inputCount: 3,
       pagesScanned: 2,
       resultCount: 3,
+      errorCount: 0,
+      preservedOrder: true,
       truncated: true,
       next: "cursor-3",
     });

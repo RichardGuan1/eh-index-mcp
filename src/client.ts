@@ -17,10 +17,12 @@ import type {
   GalleryCommentsResult,
   GalleryListResult,
   GalleryMetadata,
+  GalleryMetadataBatchResult,
   GalleryPagesResult,
   GalleryRef,
   GalleryTorrent,
   GalleryTokenResolution,
+  GalleryTokenBatchResult,
   GalleryVersionComparison,
   GalleryWorkSearchOptions,
   GalleryWorkSearchResult,
@@ -345,12 +347,27 @@ export class EhClient {
     });
   }
 
-  async getGalleryMetadataBatch(entries: GalleryRef[], site: EhSite = "e-hentai"): Promise<GalleryMetadata[]> {
-    const results: GalleryMetadata[] = [];
+  async getGalleryMetadataBatch(entries: GalleryRef[], site: EhSite = "e-hentai"): Promise<GalleryMetadataBatchResult> {
+    const galleries: GalleryMetadata[] = [];
     for (let index = 0; index < entries.length; index += 25) {
-      results.push(...await this.getGalleryMetadata(entries.slice(index, index + 25), site));
+      const batch = entries.slice(index, index + 25);
+      const results = await this.getGalleryMetadata(batch, site);
+      const byKey = new Map(results.map((entry) => [`${entry.gid}:${entry.token?.toLowerCase() ?? ""}`, entry]));
+      const byGid = new Map(results.map((entry) => [Number(entry.gid), entry]));
+      galleries.push(...batch.map((entry) => byKey.get(`${entry.gid}:${entry.token.toLowerCase()}`) ?? byGid.get(entry.gid) ?? {
+        gid: entry.gid,
+        token: entry.token,
+        error: "E-Hentai API returned no metadata for this gallery",
+      }));
     }
-    return results;
+    const successCount = galleries.filter((entry) => !entry.error).length;
+    return {
+      galleries,
+      inputCount: entries.length,
+      successCount,
+      errorCount: entries.length - successCount,
+      preservedOrder: true,
+    };
   }
 
   async resolveGalleryToken(ref: PageRef, site: EhSite = "e-hentai"): Promise<GalleryRef> {
@@ -385,7 +402,7 @@ export class EhClient {
     });
   }
 
-  async resolveGalleryTokensBatch(entries: PageRef[], site: EhSite = "e-hentai"): Promise<GalleryTokenResolution[]> {
+  async resolveGalleryTokensBatch(entries: PageRef[], site: EhSite = "e-hentai"): Promise<GalleryTokenBatchResult> {
     if (entries.length < 1 || entries.length > 500) {
       throw new Error("Batch gallery-token resolution requires between 1 and 500 entries");
     }
@@ -427,7 +444,15 @@ export class EhClient {
           : { ...entry, error: row?.error ?? "E-Hentai API returned no result for this page" });
       });
     }
-    return entries.map((entry) => resolved.get(entryKey(entry))!);
+    const results = entries.map((entry) => resolved.get(entryKey(entry))!);
+    const successCount = results.filter((entry) => !entry.error).length;
+    return {
+      results,
+      inputCount: entries.length,
+      successCount,
+      errorCount: entries.length - successCount,
+      preservedOrder: true,
+    };
   }
 
   async search(options: SearchOptions): Promise<GalleryListResult> {
@@ -466,8 +491,11 @@ export class EhClient {
 
     return {
       galleries: [...galleries.values()],
+      inputCount: galleries.size,
       pagesScanned,
       resultCount: galleries.size,
+      errorCount: 0,
+      preservedOrder: true,
       truncated: next !== null,
       next,
     };
@@ -531,7 +559,7 @@ export class EhClient {
       gid: gallery.gid,
       token: gallery.token,
     }])).values()];
-    const organized = organizeGalleryWorks(await this.getGalleryMetadataBatch(refs, site), site);
+    const organized = organizeGalleryWorks((await this.getGalleryMetadataBatch(refs, site)).galleries, site);
     return {
       ...organized,
       pagesScanned,
@@ -772,7 +800,7 @@ export class EhClient {
     add(root.gid, root.token ?? ref.token);
     for (const version of detail.newerVersions) add(version.gid, version.token);
     add(root.current_gid, root.current_key);
-    return this.getGalleryMetadataBatch([...candidates.values()], site);
+    return (await this.getGalleryMetadataBatch([...candidates.values()], site)).galleries;
   }
 
   async findLatestGalleryVersion(ref: GalleryRef, site: EhSite = "e-hentai"): Promise<GalleryMetadata> {
@@ -784,7 +812,7 @@ export class EhClient {
 
   async compareGalleryVersions(beforeRef: GalleryRef, afterRef: GalleryRef, site: EhSite = "e-hentai"): Promise<GalleryVersionComparison> {
     const sameGallery = beforeRef.gid === afterRef.gid && beforeRef.token.toLowerCase() === afterRef.token.toLowerCase();
-    const metadata = await this.getGalleryMetadataBatch(sameGallery ? [beforeRef] : [beforeRef, afterRef], site);
+    const metadata = (await this.getGalleryMetadataBatch(sameGallery ? [beforeRef] : [beforeRef, afterRef], site)).galleries;
     const before = metadata[0];
     const after = sameGallery ? before : metadata[1];
     if (!before || !after) throw new Error("Gallery version comparison returned incomplete metadata");

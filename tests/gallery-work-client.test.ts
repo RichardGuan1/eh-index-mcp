@@ -21,11 +21,17 @@ describe("gallery work search workflow", () => {
     const search = vi.spyOn(client, "search")
       .mockResolvedValueOnce({ galleries: [summary(1), summary(2)], prev: null, next: "cursor-2" })
       .mockResolvedValueOnce({ galleries: [summary(2), summary(3)], prev: "cursor-1", next: "cursor-3" });
-    const metadata = vi.spyOn(client, "getGalleryMetadataBatch").mockImplementation(async (refs) => refs.map((ref) => ({
-      ...ref,
-      title: `Work ${ref.gid}`,
-      tags: [`group:creator-${ref.gid}`],
-    })));
+    const metadata = vi.spyOn(client, "getGalleryMetadataBatch").mockImplementation(async (refs) => ({
+      galleries: refs.map((ref) => ({
+        ...ref,
+        title: `Work ${ref.gid}`,
+        tags: [`group:creator-${ref.gid}`],
+      })),
+      inputCount: refs.length,
+      successCount: refs.length,
+      errorCount: 0,
+      preservedOrder: true,
+    }));
 
     const result = await client.searchGalleryWorks({ query: "test", maxPages: 2 });
 
@@ -49,7 +55,13 @@ describe("gallery work search workflow", () => {
   it("stops at the last page and reports a complete scan", async () => {
     const client = new EhClient({ fetch: vi.fn() as typeof fetch });
     const search = vi.spyOn(client, "search").mockResolvedValue({ galleries: [summary(1)], prev: null, next: null });
-    vi.spyOn(client, "getGalleryMetadataBatch").mockResolvedValue([{ gid: 1, token: "0000000001", title: "Work 1", tags: ["group:creator"] }]);
+    vi.spyOn(client, "getGalleryMetadataBatch").mockResolvedValue({
+      galleries: [{ gid: 1, token: "0000000001", title: "Work 1", tags: ["group:creator"] }],
+      inputCount: 1,
+      successCount: 1,
+      errorCount: 0,
+      preservedOrder: true,
+    });
 
     const result = await client.searchGalleryWorks({ query: "test", maxPages: 5 });
 

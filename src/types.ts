@@ -28,6 +28,14 @@ export interface GalleryTokenResolution extends PageRef {
   error?: string;
 }
 
+export interface GalleryTokenBatchResult {
+  results: GalleryTokenResolution[];
+  inputCount: number;
+  successCount: number;
+  errorCount: number;
+  preservedOrder: true;
+}
+
 export interface SearchOptions {
   site?: EhSite;
   query?: string;
@@ -98,8 +106,11 @@ export interface GalleryBatchSearchOptions extends Omit<SearchOptions, "prev" | 
 
 export interface GalleryBatchSearchResult {
   galleries: GallerySummary[];
+  inputCount: number;
   pagesScanned: number;
   resultCount: number;
+  errorCount: 0;
+  preservedOrder: true;
   truncated: boolean;
   next: string | null;
 }
@@ -274,6 +285,14 @@ export interface GalleryMetadata {
   first_gid?: string;
   first_key?: string;
   error?: string;
+}
+
+export interface GalleryMetadataBatchResult {
+  galleries: GalleryMetadata[];
+  inputCount: number;
+  successCount: number;
+  errorCount: number;
+  preservedOrder: true;
 }
 
 export interface TagDefinitionResult {

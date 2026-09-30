@@ -30,9 +30,17 @@ describe("extended EhClient workflows", () => {
     const client = new EhClient({ fetch: fetchMock as typeof fetch, apiLimiter: noWait() });
     const refs = [{ gid: 1, token: "123456789a" }, { gid: 2, token: "123456789a" }, { gid: 1, token: "123456789a" }];
     const result = await client.getGalleryMetadataBatch(refs);
-    expect(result).toHaveLength(3);
-    expect(result[1]).toEqual({ gid: 2, error: "Key missing" });
-    expect(result[0]).toEqual(result[2]);
+    expect(result).toMatchObject({
+      galleries: [
+        { gid: 1, token: "123456789a" },
+        { gid: 2, error: "Key missing" },
+        { gid: 1, token: "123456789a" },
+      ],
+      inputCount: 3,
+      successCount: 2,
+      errorCount: 1,
+      preservedOrder: true,
+    });
   });
 
   it("batches metadata in groups of 25 and preserves result order", async () => {
@@ -44,7 +52,8 @@ describe("extended EhClient workflows", () => {
     const client = new EhClient({ fetch: fetchMock as typeof fetch, apiLimiter: noWait() });
     const refs = Array.from({ length: 52 }, (_, i) => ({ gid: i + 1, token: "123456789a" }));
     const result = await client.getGalleryMetadataBatch(refs);
-    expect(result.map((item) => item.gid)).toEqual(refs.map((item) => item.gid));
+    expect(result.galleries.map((item) => item.gid)).toEqual(refs.map((item) => item.gid));
+    expect(result).toMatchObject({ inputCount: 52, successCount: 52, errorCount: 0, preservedOrder: true });
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 

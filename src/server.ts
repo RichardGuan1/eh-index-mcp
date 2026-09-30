@@ -157,14 +157,27 @@ const galleryWorkSearchOutputSchema = z.object({ result: z.object({
     works: z.array(workSchema),
   })),
 }) });
-const metadataOutputSchema = z.object({ galleries: z.array(galleryMetadataSchema) });
+const batchSummaryShape = {
+  inputCount: z.number().int().nonnegative(),
+  successCount: z.number().int().nonnegative(),
+  errorCount: z.number().int().nonnegative(),
+  preservedOrder: z.literal(true),
+};
+const metadataSingleOutputSchema = z.object({ galleries: z.array(galleryMetadataSchema) });
+const metadataBatchOutputSchema = z.object({
+  galleries: z.array(galleryMetadataSchema),
+  ...batchSummaryShape,
+});
 const galleryPagesOutputSchema = z.object({ result: galleryPagesSchema });
 const imagePageOutputSchema = z.object({ result: imagePageSchema });
 const resolvedGalleryOutputSchema = z.object({ gallery: gallerySchema });
-const resolvedGalleryBatchOutputSchema = z.object({ results: z.array(pageSchema.extend({
-  token: z.string().regex(/^[0-9a-f]{10}$/i).optional(),
-  error: z.string().optional(),
-})) });
+const resolvedGalleryBatchOutputSchema = z.object({
+  results: z.array(pageSchema.extend({
+    token: z.string().regex(/^[0-9a-f]{10}$/i).optional(),
+    error: z.string().optional(),
+  })),
+  ...batchSummaryShape,
+});
 const favoriteCategoriesOutputSchema = z.object({ result: z.object({
   total: z.number().int().nonnegative(),
   selected: z.union([z.number().int().min(0).max(9), z.literal("all")]),
@@ -296,6 +309,13 @@ function toolError(error: unknown) {
   };
 }
 
+function successValue(value: unknown) {
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify(value) }],
+    structuredContent: value,
+  };
+}
+
 export function createServer(backend: EhBackend): McpServer {
   const server = new McpServer({ name: "eh-index-mcp", version: VERSION });
 
@@ -334,8 +354,11 @@ export function createServer(backend: EhBackend): McpServer {
       }),
       outputSchema: z.object({ result: z.object({
         galleries: z.array(gallerySummarySchema),
+        inputCount: z.number().int().nonnegative(),
         pagesScanned: z.number().int().positive(),
         resultCount: z.number().int().nonnegative(),
+        errorCount: z.literal(0),
+        preservedOrder: z.literal(true),
         truncated: z.boolean(),
         next: z.string().nullable(),
       }) }),
@@ -445,7 +468,7 @@ export function createServer(backend: EhBackend): McpServer {
         site: siteInput,
         galleries: z.array(gallerySchema).min(1).max(25).describe("1-25 gallery IDs and tokens to look up"),
       }),
-      outputSchema: metadataOutputSchema,
+      outputSchema: metadataSingleOutputSchema,
       annotations,
     },
     async ({ galleries, site }) => {
@@ -461,13 +484,13 @@ export function createServer(backend: EhBackend): McpServer {
     "eh_get_gallery_metadata_batch",
     {
       title: "Get metadata for many galleries",
-      description: "Get official metadata for up to 500 galleries. The server splits requests into official 25-item API batches and preserves input order.",
+      description: "Get official metadata for up to 500 galleries. The server splits requests into official 25-item API batches and returns per-input results in order with input, success, and error counts.",
       inputSchema: z.object({ site: siteInput, galleries: z.array(gallerySchema).min(1).max(500).describe("1-500 gallery IDs and tokens; results preserve input order") }),
-      outputSchema: metadataOutputSchema,
+      outputSchema: metadataBatchOutputSchema,
       annotations,
     },
     async ({ galleries, site }) => {
-      try { return success("galleries", await backend.getGalleryMetadataBatch(galleries, site)); } catch (error) { return toolError(error); }
+      try { return successValue(await backend.getGalleryMetadataBatch(galleries, site)); } catch (error) { return toolError(error); }
     },
   );
 
@@ -767,7 +790,7 @@ export function createServer(backend: EhBackend): McpServer {
     "eh_resolve_gallery_batch",
     {
       title: "Resolve galleries from image pages in batch",
-      description: "Resolve 1-500 image-page references to gallery tokens through the official API, preserving input order, duplicates, and per-entry errors.",
+      description: "Resolve 1-500 image-page references to gallery tokens through the official API, preserving input order and duplicates. Returns per-input results with input, success, and error counts.",
       inputSchema: z.object({
         site: siteInput,
         pages: z.array(pageSchema).min(1).max(500).describe("1-500 image-page references to resolve"),
@@ -777,7 +800,7 @@ export function createServer(backend: EhBackend): McpServer {
     },
     async ({ pages, site }) => {
       try {
-        return success("results", await backend.resolveGalleryTokensBatch(pages, site));
+        return successValue(await backend.resolveGalleryTokensBatch(pages, site));
       } catch (error) {
         return toolError(error);
       }

@@ -48,9 +48,10 @@ describe("batch gallery-token resolution", () => {
     const result = await client.resolveGalleryTokensBatch(pages);
 
     expect(batchSizes).toEqual([25, 1]);
-    expect(result).toHaveLength(27);
-    expect(result[0]).toEqual(result[25]);
-    expect(result[26]).toEqual({ gid: 99, pageToken: "9999999999", page: 2, error: "File not found" });
+    expect(result.results).toHaveLength(27);
+    expect(result.results[0]).toEqual(result.results[25]);
+    expect(result.results[26]).toEqual({ gid: 99, pageToken: "9999999999", page: 2, error: "File not found" });
+    expect(result).toMatchObject({ inputCount: 27, successCount: 25, errorCount: 2, preservedOrder: true });
   });
 
   it("rejects token rows that belong to a different gallery", async () => {
