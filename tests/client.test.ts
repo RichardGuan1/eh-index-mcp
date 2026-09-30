@@ -47,6 +47,36 @@ describe("EhClient", () => {
     await expect(client.popular()).rejects.toThrow("image quota exhausted");
   });
 
+  it("classifies HTTP 429 as a retryable rate-limit error", async () => {
+    const fetchMock = vi.fn(async () => new Response("Too many requests", { status: 429 }));
+    const client = new EhClient({ fetch: fetchMock as typeof fetch, maxRetries: 0 });
+
+    await expect(client.popular()).rejects.toMatchObject({
+      code: "RATE_LIMITED",
+      retryable: true,
+      status: 429,
+      site: "e-hentai",
+    });
+  });
+
+  it("classifies fetch failures as retryable network errors", async () => {
+    const fetchMock = vi.fn(async () => {
+      throw new TypeError("fetch failed");
+    });
+    const client = new EhClient({
+      fetch: fetchMock as typeof fetch,
+      maxRetries: 0,
+      cookies: { memberId: "42", passHash: "secret", igneous: "igneous" },
+    });
+
+    await expect(client.popular("exhentai")).rejects.toMatchObject({
+      code: "NETWORK_ERROR",
+      retryable: true,
+      site: "exhentai",
+      stage: "http-request",
+    });
+  });
+
   it("aborts requests after the configured timeout", async () => {
     const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       await new Promise((_, reject) => {
@@ -88,8 +118,57 @@ describe("EhClient", () => {
     });
 
     await expect(client.search({ site: "exhentai", query: "test" }))
-      .rejects.toThrow("EH_IGNEOUS");
+      .rejects.toMatchObject({
+        code: "AUTH_REQUIRED",
+        site: "exhentai",
+        stage: "http-request",
+      });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("classifies missing favorites credentials with site context", async () => {
+    const client = new EhClient({ fetch: vi.fn() as typeof fetch });
+
+    await expect(client.searchFavorites({ site: "exhentai" })).rejects.toMatchObject({
+      code: "AUTH_REQUIRED",
+      retryable: false,
+      site: "exhentai",
+      stage: "favorites",
+    });
+  });
+
+  it("classifies a favorites login page as rejected credentials", async () => {
+    const fetchMock = vi.fn(async () => new Response(
+      '<html><title>E-Hentai.org Login</title><form name="ipb_login_form"></form></html>',
+      { status: 200 },
+    ));
+    const client = new EhClient({
+      fetch: fetchMock as typeof fetch,
+      cookies: { memberId: "42", passHash: "secret", igneous: "igneous" },
+    });
+
+    await expect(client.searchFavorites({ site: "exhentai" })).rejects.toMatchObject({
+      code: "AUTH_REJECTED",
+      retryable: false,
+      site: "exhentai",
+      stage: "favorites",
+    });
+  });
+
+  it("classifies a malformed API payload with site context", async () => {
+    const fetchMock = vi.fn(async () => new Response("{}", {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    const client = new EhClient({ fetch: fetchMock as typeof fetch });
+
+    await expect(client.getGalleryMetadata([{ gid: 1, token: "123456789a" }], "e-hentai"))
+      .rejects.toMatchObject({
+        code: "PARSE_ERROR",
+        retryable: false,
+        site: "e-hentai",
+        stage: "api-response",
+      });
   });
 
   it("uses an API limiter that stays within four calls per five seconds", async () => {

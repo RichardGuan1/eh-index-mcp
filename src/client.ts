@@ -41,6 +41,7 @@ import { parseTagTranslationDatabase, searchTranslatedTags } from "./tag-transla
 import { organizeGalleryWorks } from "./gallery-works.js";
 import { extractSimilarGalleryTitle } from "./gallery-title.js";
 import { VERSION } from "./version.js";
+import { EhError, networkErrorContext } from "./errors.js";
 
 const TAG_TRANSLATION_DATABASE_URL = "https://raw.githubusercontent.com/EhTagTranslation/Database/release/db.text.json";
 const TAG_TRANSLATION_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
@@ -71,8 +72,8 @@ export interface EhClientOptions {
   apiLimiter?: SerialRateLimiter;
 }
 
-class HttpStatusError extends Error {
-  constructor(readonly status: number, readonly statusText: string) {
+class HttpStatusError extends EhError {
+  constructor(site: EhSite, status: number, readonly statusText: string) {
     const detail = status === 509
       ? "image quota exhausted; stop image requests and wait for quota recovery"
       : status === 429
@@ -86,7 +87,21 @@ class HttpStatusError extends Error {
             : status === 404
               ? "resource not found or no longer available"
               : statusText || "request failed";
-    super(`E-Hentai HTTP ${status}: ${detail}`);
+    const code = status === 401
+      ? "AUTH_REQUIRED"
+      : status === 403
+        ? "AUTH_REJECTED"
+        : status === 404
+          ? "NOT_FOUND"
+          : status === 429 || status === 509
+            ? "RATE_LIMITED"
+            : "UPSTREAM_ERROR";
+    super(code, `E-Hentai HTTP ${status}: ${detail}`, {
+      retryable: status === 429 || status === 502 || status === 503 || status === 504,
+      site,
+      stage: "http-request",
+      status,
+    });
     this.name = "HttpStatusError";
   }
 }
@@ -148,6 +163,14 @@ async function readTextWithLimit(response: Response, maxBytes: number, label: st
 
 function isLoginPage(html: string): boolean {
   return /<title>\s*E-Hentai\.org Login\s*<\/title>|name=["']ipb_login_form["']/i.test(html);
+}
+
+function authRejected(message: string, site: EhSite, stage: string): EhError {
+  return new EhError("AUTH_REJECTED", message, { retryable: false, site, stage });
+}
+
+function authRequired(message: string, site: EhSite, stage: string): EhError {
+  return new EhError("AUTH_REQUIRED", message, { retryable: false, site, stage });
 }
 
 function validateCookies(cookies: IdentityCookies | undefined): void {
@@ -217,7 +240,11 @@ export class EhClient {
 
   async #request(url: string, site: EhSite, init: RequestInit = {}): Promise<Response> {
     if (site === "exhentai" && (!this.#cookies?.memberId || !this.#cookies.passHash || !this.#cookies.igneous)) {
-      throw new Error("ExHentai requires EH_MEMBER_ID, EH_PASS_HASH, and EH_IGNEOUS credentials");
+      throw new EhError("AUTH_REQUIRED", "ExHentai requires EH_MEMBER_ID, EH_PASS_HASH, and EH_IGNEOUS credentials", {
+        retryable: false,
+        site,
+        stage: "http-request",
+      });
     }
     const headers = new Headers(init.headers);
     headers.set("user-agent", this.#userAgent);
@@ -236,9 +263,14 @@ export class EhClient {
         response = await this.#fetch(url, { ...init, headers, signal });
       } catch (error) {
         if (timeoutSignal.aborted) {
-          throw new Error(`E-Hentai request timed out after ${this.#timeoutMs}ms`, { cause: error });
+          throw new EhError("NETWORK_ERROR", `E-Hentai request timed out after ${this.#timeoutMs}ms`, {
+            retryable: true,
+            site,
+            stage: "http-request",
+            cause: error,
+          });
         }
-        throw error;
+        throw networkErrorContext(error, { site, stage: "http-request" });
       }
       if (response.ok) return response;
       const retryable = response.status === 429 || response.status === 502 || response.status === 503 || response.status === 504;
@@ -249,24 +281,34 @@ export class EhClient {
             await sleepWithSignal(delay, signal);
           } catch (error) {
             if (timeoutSignal.aborted) {
-              throw new Error(`E-Hentai request timed out after ${this.#timeoutMs}ms`, { cause: error });
+              throw new EhError("NETWORK_ERROR", `E-Hentai request timed out after ${this.#timeoutMs}ms`, {
+                retryable: true,
+                site,
+                stage: "http-request",
+                cause: error,
+              });
             }
-            throw error;
+            throw networkErrorContext(error, { site, stage: "http-request" });
           }
         }
         continue;
       }
-      throw new HttpStatusError(response.status, response.statusText);
+      throw new HttpStatusError(site, response.status, response.statusText);
     }
   }
 
-  async #readJson<T>(response: Response): Promise<T> {
+  async #readJson<T>(response: Response, site: EhSite): Promise<T> {
     const text = await response.text();
     try {
       return JSON.parse(text) as T;
     } catch (error) {
-      assertNotChallengePage(text);
-      throw new Error("E-Hentai API returned malformed JSON", { cause: error });
+      assertNotChallengePage(text, site);
+      throw new EhError("PARSE_ERROR", "E-Hentai API returned malformed JSON", {
+        retryable: false,
+        site,
+        stage: "api-json",
+        cause: error,
+      });
     }
   }
 
@@ -282,9 +324,17 @@ export class EhClient {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ method: "gdata", gidlist: uniqueEntries.map(({ gid, token }) => [gid, token]), namespace: 1 }),
       });
-      const body = await this.#readJson<{ gmetadata?: GalleryMetadata[]; error?: string }>(response);
-      if (body.error) throw new Error(`E-Hentai API error: ${body.error}`);
-      if (!Array.isArray(body.gmetadata)) throw new Error("E-Hentai API returned malformed gallery metadata");
+      const body = await this.#readJson<{ gmetadata?: GalleryMetadata[]; error?: string }>(response, site);
+      if (body.error) throw new EhError("UPSTREAM_ERROR", `E-Hentai API error: ${body.error}`, {
+        retryable: false,
+        site,
+        stage: "api-response",
+      });
+      if (!Array.isArray(body.gmetadata)) throw new EhError("PARSE_ERROR", "E-Hentai API returned malformed gallery metadata", {
+        retryable: false,
+        site,
+        stage: "api-response",
+      });
       return body.gmetadata;
     }));
     const byKey = new Map(metadata.filter((entry) => entry.token).map((entry) => [refKey(entry as GalleryRef), entry]));
@@ -310,14 +360,26 @@ export class EhClient {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ method: "gtoken", pagelist: [[ref.gid, ref.pageToken, ref.page]] }),
       });
-      const body = await this.#readJson<{ tokenlist?: Array<GalleryRef & { error?: string }>; error?: string }>(response);
-      if (body.error) throw new Error(`E-Hentai API error: ${body.error}`);
+      const body = await this.#readJson<{ tokenlist?: Array<GalleryRef & { error?: string }>; error?: string }>(response, site);
+      if (body.error) throw new EhError("UPSTREAM_ERROR", `E-Hentai API error: ${body.error}`, {
+        retryable: false,
+        site,
+        stage: "api-response",
+      });
       const result = body.tokenlist?.[0];
       if (!result || result.error || !result.token) {
-        throw new Error(`Could not resolve gallery token${result?.error ? `: ${result.error}` : ""}`);
+        throw new EhError("NOT_FOUND", `Could not resolve gallery token${result?.error ? `: ${result.error}` : ""}`, {
+          retryable: false,
+          site,
+          stage: "api-response",
+        });
       }
       if (Number(result.gid) !== ref.gid) {
-        throw new Error(`E-Hentai API returned a mismatched gallery token row: expected gid ${ref.gid}, received ${result.gid}`);
+        throw new EhError("PARSE_ERROR", `E-Hentai API returned a mismatched gallery token row: expected gid ${ref.gid}, received ${result.gid}`, {
+          retryable: false,
+          site,
+          stage: "api-response",
+        });
       }
       return { gid: result.gid, token: result.token };
     });
@@ -338,15 +400,27 @@ export class EhClient {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ method: "gtoken", pagelist: batch.map(({ gid, pageToken, page }) => [gid, pageToken, page]) }),
         });
-        const body = await this.#readJson<{ tokenlist?: Array<{ gid: number; token?: string; error?: string }>; error?: string }>(response);
-        if (body.error) throw new Error(`E-Hentai API error: ${body.error}`);
-        if (!Array.isArray(body.tokenlist)) throw new Error("E-Hentai API returned malformed gallery tokens");
+        const body = await this.#readJson<{ tokenlist?: Array<{ gid: number; token?: string; error?: string }>; error?: string }>(response, site);
+        if (body.error) throw new EhError("UPSTREAM_ERROR", `E-Hentai API error: ${body.error}`, {
+          retryable: false,
+          site,
+          stage: "api-response",
+        });
+        if (!Array.isArray(body.tokenlist)) throw new EhError("PARSE_ERROR", "E-Hentai API returned malformed gallery tokens", {
+          retryable: false,
+          site,
+          stage: "api-response",
+        });
         return body.tokenlist;
       });
       batch.forEach((entry, offset) => {
         const row = rows[offset];
         if (row && Number(row.gid) !== entry.gid) {
-          throw new Error(`E-Hentai API returned a mismatched gallery token row: expected gid ${entry.gid}, received ${row.gid}`);
+          throw new EhError("PARSE_ERROR", `E-Hentai API returned a mismatched gallery token row: expected gid ${entry.gid}, received ${row.gid}`, {
+            retryable: false,
+            site,
+            stage: "api-response",
+          });
         }
         resolved.set(entryKey(entry), row?.token
           ? { ...entry, token: row.token }
@@ -490,32 +564,32 @@ export class EhClient {
   }
 
   async searchFavorites(options: FavoritesOptions): Promise<GalleryListResult> {
-    if (!this.#cookies?.memberId || !this.#cookies.passHash) {
-      throw new Error("Favorites require EH_MEMBER_ID and EH_PASS_HASH credentials");
-    }
     const site = options.site ?? "e-hentai";
+    if (!this.#cookies?.memberId || !this.#cookies.passHash) {
+      throw authRequired("Favorites require EH_MEMBER_ID and EH_PASS_HASH credentials", site, "favorites");
+    }
     const key = `favorites:${site}:${JSON.stringify(options)}`;
     return this.#cached(key, this.#shortCacheTtlMs, () => this.#searchLimiter.run(async () => {
       const response = await this.#request(buildFavoritesUrl(options), site);
       const html = await response.text();
       if (isLoginPage(html)) {
-        throw new Error("E-Hentai favorites credentials expired or were rejected; refresh EH_MEMBER_ID and EH_PASS_HASH");
+        throw authRejected("E-Hentai favorites credentials expired or were rejected; refresh EH_MEMBER_ID and EH_PASS_HASH", site, "favorites");
       }
       return parseGalleryList(html, site);
     }));
   }
 
   async searchWatched(options: SearchOptions): Promise<GalleryListResult> {
-    if (!this.#cookies?.memberId || !this.#cookies.passHash) {
-      throw new Error("Watched searches require EH_MEMBER_ID and EH_PASS_HASH credentials");
-    }
     const site = options.site ?? "e-hentai";
+    if (!this.#cookies?.memberId || !this.#cookies.passHash) {
+      throw authRequired("Watched searches require EH_MEMBER_ID and EH_PASS_HASH credentials", site, "watched");
+    }
     const key = `watched:${site}:${JSON.stringify(options)}`;
     return this.#cached(key, this.#shortCacheTtlMs, () => this.#searchLimiter.run(async () => {
       const response = await this.#request(buildWatchedUrl(options), site);
       const html = await response.text();
       if (isLoginPage(html)) {
-        throw new Error("E-Hentai watched credentials expired or were rejected; refresh EH_MEMBER_ID and EH_PASS_HASH");
+        throw authRejected("E-Hentai watched credentials expired or were rejected; refresh EH_MEMBER_ID and EH_PASS_HASH", site, "watched");
       }
       return parseGalleryList(html, site);
     }));
@@ -523,19 +597,19 @@ export class EhClient {
 
   async getFavoriteCategories(site: EhSite = "e-hentai"): Promise<FavoriteCategoriesResult> {
     if (!this.#cookies?.memberId || !this.#cookies.passHash) {
-      throw new Error("Favorite categories require EH_MEMBER_ID and EH_PASS_HASH credentials");
+      throw authRequired("Favorite categories require EH_MEMBER_ID and EH_PASS_HASH credentials", site, "favorites");
     }
     return this.#searchLimiter.run(async () => {
       const response = await this.#request(buildFavoritesUrl({ site, category: "all" }), site);
       const html = await response.text();
-      if (isLoginPage(html)) throw new Error("E-Hentai favorite credentials expired or were rejected");
-      return parseFavoriteCategories(html);
+      if (isLoginPage(html)) throw authRejected("E-Hentai favorite credentials expired or were rejected", site, "favorites");
+      return parseFavoriteCategories(html, site);
     });
   }
 
   async getFavoriteDetail(ref: GalleryRef, site: EhSite = "e-hentai"): Promise<FavoriteDetailResult> {
     if (!this.#cookies?.memberId || !this.#cookies.passHash) {
-      throw new Error("Favorite detail requires EH_MEMBER_ID and EH_PASS_HASH credentials");
+      throw authRequired("Favorite detail requires EH_MEMBER_ID and EH_PASS_HASH credentials", site, "favorites");
     }
     const host = site === "exhentai" ? "exhentai.org" : "e-hentai.org";
     const popupUrl = new URL(`https://${host}/gallerypopups.php`);
@@ -543,16 +617,16 @@ export class EhClient {
     const popupHtml = await this.#pageLimiter.run(async () => {
       const response = await this.#request(popupUrl.toString(), site);
       const html = await response.text();
-      if (isLoginPage(html)) throw new Error("E-Hentai favorite credentials expired or were rejected");
+      if (isLoginPage(html)) throw authRejected("E-Hentai favorite credentials expired or were rejected", site, "favorites");
       return html;
     });
     const listHtml = await this.#searchLimiter.run(async () => {
       const response = await this.#request(buildFavoritesUrl({ site, category: "all", query: `gid:${ref.gid}` }), site);
       const html = await response.text();
-      if (isLoginPage(html)) throw new Error("E-Hentai favorite credentials expired or were rejected");
+      if (isLoginPage(html)) throw authRejected("E-Hentai favorite credentials expired or were rejected", site, "favorites");
       return html;
     });
-    return parseFavoriteDetail(popupHtml, listHtml, ref);
+    return parseFavoriteDetail(popupHtml, listHtml, ref, site);
   }
 
   async popular(site: EhSite = "e-hentai"): Promise<GalleryListResult> {
@@ -565,7 +639,7 @@ export class EhClient {
   async getGalleryDetail(ref: GalleryRef, site: EhSite = "e-hentai"): Promise<GalleryDetailResult> {
     return this.#cached(`detail:${site}:${ref.gid}:${ref.token}`, this.#longCacheTtlMs, () => this.#pageLimiter.run(async () => {
       const response = await this.#request(galleryUrl(ref, site), site);
-      return parseGalleryDetail(await response.text(), ref);
+      return parseGalleryDetail(await response.text(), ref, site);
     }));
   }
 
@@ -574,20 +648,20 @@ export class EhClient {
       const url = new URL(galleryUrl(ref, site));
       if (includeHidden) url.searchParams.set("hc", "1");
       const response = await this.#request(url.toString(), site);
-      return { comments: parseGalleryComments(await response.text()), includeHidden };
+      return { comments: parseGalleryComments(await response.text(), site), includeHidden };
     }));
   }
 
   async getTorrents(ref: GalleryRef, site: EhSite = "e-hentai"): Promise<GalleryTorrent[]> {
     return this.#cached(`torrents:${site}:${ref.gid}:${ref.token}`, this.#longCacheTtlMs, () => this.#pageLimiter.run(async () => {
       const response = await this.#request(galleryTorrentsUrl(ref, site), site);
-      return parseTorrents(await response.text());
+      return parseTorrents(await response.text(), site);
     }));
   }
 
   async getArchiveOptions(ref: GalleryRef, site: EhSite = "e-hentai"): Promise<ArchiveOptionsResult> {
     if (!this.#cookies?.memberId || !this.#cookies.passHash) {
-      throw new Error("Archive options require EH_MEMBER_ID and EH_PASS_HASH credentials");
+      throw authRequired("Archive options require EH_MEMBER_ID and EH_PASS_HASH credentials", site, "archive");
     }
     return this.#pageLimiter.run(async () => {
       const host = site === "exhentai" ? "exhentai.org" : "e-hentai.org";
@@ -595,8 +669,8 @@ export class EhClient {
       url.search = new URLSearchParams({ gid: String(ref.gid), token: ref.token }).toString();
       const response = await this.#request(url.toString(), site);
       const html = await response.text();
-      if (isLoginPage(html)) throw new Error("E-Hentai archive credentials expired or were rejected");
-      return parseArchiveOptions(html);
+      if (isLoginPage(html)) throw authRejected("E-Hentai archive credentials expired or were rejected", site, "archive");
+      return parseArchiveOptions(html, site);
     });
   }
 
@@ -646,7 +720,7 @@ export class EhClient {
     try {
       const response = await this.#pageLimiter.run(() => this.#request(probeUrl, site));
       const html = await response.text();
-      assertNotChallengePage(html);
+      assertNotChallengePage(html, site);
       const rejected = credentialsProvided && isLoginPage(html);
       return {
         site,
@@ -671,7 +745,7 @@ export class EhClient {
         credentialsProvided,
         authenticated: authenticationRejected ? false : credentialsProvided ? null : false,
         cloudflareChallenge: /Cloudflare challenge/i.test(message),
-        status: error instanceof HttpStatusError ? error.status : null,
+        status: error instanceof HttpStatusError ? error.status ?? null : null,
         message,
       };
     }

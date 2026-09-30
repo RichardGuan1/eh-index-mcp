@@ -1,6 +1,7 @@
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createServer } from "../src/server.js";
+import { EhError } from "../src/errors.js";
 
 const closeables: Array<{ close(): Promise<void> }> = [];
 afterEach(async () => {
@@ -98,6 +99,40 @@ describe("MCP server", () => {
     const result = await client.callTool({ name: "eh_check_access", arguments: { site: "e-hentai" } });
     expect(result.isError).toBe(true);
     expect(result.content).toEqual([{ type: "text", text: "diagnostic failed" }]);
+  });
+
+  it("returns typed tool errors as structured content while preserving readable text", async () => {
+    const backend = {
+      checkAccess: vi.fn(async () => {
+        throw new EhError("AUTH_REJECTED", "Credentials were rejected", {
+          retryable: false,
+          site: "exhentai",
+          stage: "access-check",
+          status: 200,
+        });
+      }),
+    };
+    const server = createServer(backend as never);
+    const client = new Client({ name: "test-client", version: "1.0.0" });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeables.push(client, server);
+
+    const result = await client.callTool({ name: "eh_check_access", arguments: { site: "exhentai" } });
+
+    expect(result.isError).toBe(true);
+    expect(result.content).toEqual([{ type: "text", text: "Credentials were rejected" }]);
+    expect(result.structuredContent).toEqual({
+      error: {
+        code: "AUTH_REJECTED",
+        message: "Credentials were rejected",
+        retryable: false,
+        site: "exhentai",
+        stage: "access-check",
+        status: 200,
+      },
+    });
   });
 
   it("advertises gallery descriptions as untrusted structured detail content", async () => {

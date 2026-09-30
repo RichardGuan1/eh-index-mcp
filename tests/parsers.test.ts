@@ -10,6 +10,15 @@ describe("HTML parsers", () => {
     expect(() => parseGalleryList(challenge)).toThrow("Cloudflare challenge");
   });
 
+  it("keeps the requested site on parser errors", () => {
+    const challenge = '<html><title>Just a moment...</title><div class="cf-chl-widget"></div></html>';
+    expect(() => parseGalleryList(challenge, "exhentai")).toThrowError(expect.objectContaining({
+      code: "CLOUDFLARE_CHALLENGE",
+      site: "exhentai",
+      stage: "html-parser",
+    }));
+  });
+
   it("rejects a login page instead of returning empty results", () => {
     const login = '<html><title>E-Hentai.org Login</title><form name="ipb_login_form"></form></html>';
     expect(() => parseGalleryList(login)).toThrow("login page");
@@ -71,6 +80,16 @@ describe("HTML parsers", () => {
   it("rejects a 509 placeholder image returned with HTTP 200", () => {
     const html = '<div id="i3"><img id="img" src="https://ehgt.org/g/509.gif"></div>';
     expect(() => parseImagePage(html)).toThrow("image quota exhausted");
+  });
+
+  it("classifies image quota pages as retry-blocking rate limits", () => {
+    expect(() => parseImagePage("You have exceeded your image viewing limits", "exhentai"))
+      .toThrowError(expect.objectContaining({
+        code: "RATE_LIMITED",
+        retryable: false,
+        site: "exhentai",
+        stage: "image-page",
+      }));
   });
 
   it("rejects a textual image-limit response returned with HTTP 200", () => {

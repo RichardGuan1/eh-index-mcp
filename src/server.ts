@@ -5,6 +5,7 @@ import type { EhSite, FavoritesOptions, GalleryRef, PageRef, SearchOptions } fro
 import { parseGalleryPreviewUrl, parseGalleryUrl, parsePageUrl, siteFromUrl } from "./urls.js";
 import { buildStructuredSearchQuery, getSearchCapabilities } from "./search-tools.js";
 import { VERSION } from "./version.js";
+import { ehErrorFromUnknown } from "./errors.js";
 
 export interface EhBackend {
   getGalleryMetadata(entries: GalleryRef[], site?: EhSite): ReturnType<EhClient["getGalleryMetadata"]>;
@@ -287,8 +288,12 @@ function success(key: string, value: unknown) {
 }
 
 function toolError(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error);
-  return { content: [{ type: "text" as const, text: message }], isError: true as const };
+  const typed = ehErrorFromUnknown(error);
+  return {
+    content: [{ type: "text" as const, text: typed.message }],
+    structuredContent: { error: typed.toJSON() },
+    isError: true as const,
+  };
 }
 
 export function createServer(backend: EhBackend): McpServer {
@@ -577,7 +582,13 @@ export function createServer(backend: EhBackend): McpServer {
       outputSchema: accessOutputSchema,
       annotations,
     },
-    async ({ site }) => success("result", await backend.checkAccess(site)),
+    async ({ site }) => {
+      try {
+        return success("result", await backend.checkAccess(site));
+      } catch (error) {
+        return toolError(error);
+      }
+    },
   );
 
   server.registerTool(
