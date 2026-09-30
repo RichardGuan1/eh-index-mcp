@@ -66,6 +66,17 @@ try {
     throw new Error("Packed server rendered an invalid gallery research prompt");
   }
 
+  const promptCases = [
+    ["eh_gallery_compare", "eh_compare_gallery_versions", { site: "e-hentai", before: "1:old", after: "2:new", goal: "compare" }],
+    ["eh_gallery_version_audit", "eh_get_gallery_chain", { site: "e-hentai", gallery: "1:token", goal: "audit" }],
+    ["eh_tag_research", "eh_search_translated_tags", { site: "e-hentai", term: "中文标签", goal: "translate" }],
+  ];
+  for (const [name, tool, arguments_] of promptCases) {
+    const rendered = await client.getPrompt({ name, arguments: arguments_ });
+    const text = rendered.messages[0]?.content?.type === "text" ? rendered.messages[0].content.text : "";
+    if (!text.includes(tool)) throw new Error(`Packed server rendered an invalid ${name} prompt`);
+  }
+
   const query = await client.callTool({
     name: "eh_build_search_query",
     arguments: { includeTags: ["language:chinese"], exactTags: true },

@@ -123,6 +123,32 @@ describe("MCP server", () => {
     expect((text as { text: string }).text).toContain("language:chinese$");
     expect((text as { text: string }).text).toContain("gid");
   });
+  it("advertises and renders the gallery comparison prompts", async () => {
+    const server = createServer({} as never);
+    const client = new Client({ name: "test-client", version: "1.0.0" });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeables.push(client, server);
+
+    const prompts = await client.listPrompts();
+    expect(prompts.prompts.map((prompt) => prompt.name)).toEqual(expect.arrayContaining([
+      "eh_gallery_compare",
+      "eh_gallery_version_audit",
+      "eh_tag_research",
+    ]));
+
+    const cases = [
+      ["eh_gallery_compare", "eh_compare_gallery_versions", { site: "e-hentai", before: "1:old", after: "2:new", goal: "research this" }],
+      ["eh_gallery_version_audit", "eh_get_gallery_chain", { site: "e-hentai", gallery: "1:token", goal: "research this" }],
+      ["eh_tag_research", "eh_search_translated_tags", { site: "e-hentai", term: "中文标签", goal: "research this" }],
+    ] as const;
+    for (const [name, tool, arguments_] of cases) {
+      const prompt = await client.getPrompt({ name, arguments: arguments_ });
+      const content = prompt.messages[0]?.content;
+      expect(content).toEqual({ type: "text", text: expect.stringContaining(tool) });
+    }
+  });
   it("returns check-access backend failures as MCP tool errors", async () => {
     const backend = {
       checkAccess: vi.fn(async () => { throw new Error("diagnostic failed"); }),
