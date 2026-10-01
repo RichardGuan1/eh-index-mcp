@@ -215,51 +215,6 @@ export function createServer(backend: EhBackend): McpServer {
   registerSearchTools(server, backend);
 
   server.registerTool(
-    "eh_find_similar_galleries",
-    {
-      title: "Find similar galleries",
-      description: "Find galleries using EhViewer's strategy: extract a structural title and run an exact quoted search, falling back to the first artist tag and then the uploader when no title remains.",
-      inputSchema: z.object({
-        site: siteInput,
-        gallery: gallerySchema.optional().describe("Gallery ID and token; provide this or galleryUrl, but not both"),
-        galleryUrl: z.string().url().optional().describe("Full gallery URL; provide this or gallery, but not both"),
-      }).refine((value) => Boolean(value.gallery) !== Boolean(value.galleryUrl), "Provide exactly one of gallery or galleryUrl"),
-      outputSchema: similarGalleryOutputSchema,
-      annotations,
-    },
-    async ({ gallery, galleryUrl, site }) => {
-      try {
-        const ref = gallery ?? parseGalleryUrl(galleryUrl!);
-        return success("result", await backend.findSimilarGalleries(ref, galleryUrl ? siteFromUrl(galleryUrl) : site));
-      } catch (error) {
-        return toolError(error);
-      }
-    },
-  );
-
-  server.registerTool(
-    "eh_search_gallery_works",
-    {
-      title: "Search and organize gallery works",
-      description: "Search up to 10 result pages, fetch official metadata, merge official version links and likely language/upload variants into works, then group installments into series. galleryCount counts unique gallery uploads; uniqueWorkCount is heuristic and every work includes a confidence level plus all source galleries.",
-      inputSchema: z.object({
-        ...searchInputShape,
-        maxPages: z.number().int().min(1).max(10).default(5).describe("Maximum result pages to scan; each page consumes one rate-limited search request"),
-        next: z.string().optional().describe("Resume cursor returned by a previous truncated work search"),
-      }),
-      outputSchema: galleryWorkSearchOutputSchema,
-      annotations,
-    },
-    async (input) => {
-      try {
-        return success("result", await backend.searchGalleryWorks(input));
-      } catch (error) {
-        return toolError(error);
-      }
-    },
-  );
-
-  server.registerTool(
     "eh_get_popular",
     {
       title: "Get popular galleries",

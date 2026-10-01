@@ -64,6 +64,30 @@ export const capabilitiesOutputSchema = z.object({ result: z.object({
   limits: z.object({ maxQueryLength: z.number().int(), maxInclusions: z.number().int(), maxExclusions: z.number().int(), minimumIntervalMs: z.number().int() }),
 }) });
 
+export const similarGalleryOutputSchema = z.object({ result: z.object({
+  strategy: z.enum(["title", "artist", "uploader"]),
+  query: z.string(),
+  result: galleryListSchema,
+}) });
+export const galleryWorkSearchOutputSchema = z.object({ result: z.object({
+  pagesScanned: z.number().int().positive(),
+  searchedGalleryCount: z.number().int().nonnegative(),
+  galleryCount: z.number().int().nonnegative(),
+  uniqueWorkCount: z.number().int().nonnegative(),
+  seriesCount: z.number().int().nonnegative(),
+  truncated: z.boolean(),
+  next: z.string().nullable(),
+  series: z.array(z.object({
+    key: z.string(), title: z.string(), creators: z.array(z.string()),
+    works: z.array(z.object({
+      key: z.string(), title: z.string(), installment: z.string().nullable(), creators: z.array(z.string()), availableLanguages: z.array(z.string()),
+      groupingConfidence: z.enum(["high", "medium", "low"]), groupingBasis: z.enum(["official-version-chain", "normalized-title-and-creator", "standalone"]), groupingExplanation: z.string(),
+      preferredGallery: z.object({ gid: z.number(), token: z.string(), site: siteSchema, url: z.string().url(), title: z.string(), titleJpn: z.string().nullable(), category: z.string().nullable(), posted: z.string().nullable(), pages: z.number().nullable(), rating: z.number().nullable(), languages: z.array(z.string()) }),
+      variants: z.array(z.object({ gid: z.number(), token: z.string(), site: siteSchema, url: z.string().url(), title: z.string(), titleJpn: z.string().nullable(), category: z.string().nullable(), posted: z.string().nullable(), pages: z.number().nullable(), rating: z.number().nullable(), languages: z.array(z.string()) })),
+    })),
+  })),
+}) });
+
 export const searchInputShape = {
   site: siteInput,
   query: z.string().max(200).optional().describe("Native E-Hentai query, e.g. language:chinese$ artist:name$"),
