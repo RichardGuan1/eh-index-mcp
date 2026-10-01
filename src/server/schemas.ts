@@ -19,6 +19,16 @@ export const annotations = {
   openWorldHint: true,
 };
 
+export const accessOutputSchema = z.object({ result: z.object({
+  site: siteSchema,
+  credentialsProvided: z.boolean(),
+  authenticated: z.boolean().nullable(),
+  reachable: z.boolean().nullable(),
+  cloudflareChallenge: z.boolean(),
+  status: z.number().int().nullable(),
+  message: z.string(),
+}) });
+
 export const searchInputShape = {
   site: siteInput,
   query: z.string().max(200).optional().describe("Native E-Hentai query, e.g. language:chinese$ artist:name$"),

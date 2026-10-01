@@ -1,44 +1,14 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
-import type { EhClient } from "./client.js";
+import type { EhBackend } from "./server/backend.js";
 import type { EhSite, FavoritesOptions, GalleryRef, PageRef, SearchOptions } from "./types.js";
 import { parseGalleryPreviewUrl, parseGalleryUrl, parsePageUrl, siteFromUrl } from "./urls.js";
 import { buildStructuredSearchQuery, getSearchCapabilities } from "./search-tools.js";
 import { VERSION } from "./version.js";
 import { registerPrompts } from "./server/prompts.js";
 import { success, successValue, toolError } from "./server/helpers.js";
-import { siteSchema, siteInput, gallerySchema, pageSchema, annotations, searchInputShape } from "./server/schemas.js";
-
-export interface EhBackend {
-  getGalleryMetadata(entries: GalleryRef[], site?: EhSite): ReturnType<EhClient["getGalleryMetadata"]>;
-  getGalleryMetadataBatch(entries: GalleryRef[], site?: EhSite): ReturnType<EhClient["getGalleryMetadataBatch"]>;
-  searchByHash(sha1: string, site?: EhSite): ReturnType<EhClient["searchByHash"]>;
-  searchByFile(path: string, site?: EhSite): ReturnType<EhClient["searchByFile"]>;
-  search(options: SearchOptions): ReturnType<EhClient["search"]>;
-  searchBatch(options: Parameters<EhClient["searchBatch"]>[0]): ReturnType<EhClient["searchBatch"]>;
-  searchWatched(options: SearchOptions): ReturnType<EhClient["searchWatched"]>;
-  findSimilarGalleries(ref: GalleryRef, site?: EhSite): ReturnType<EhClient["findSimilarGalleries"]>;
-  searchGalleryWorks(options: Parameters<EhClient["searchGalleryWorks"]>[0]): ReturnType<EhClient["searchGalleryWorks"]>;
-  popular(site?: EhSite): ReturnType<EhClient["popular"]>;
-  searchFavorites(options: FavoritesOptions): ReturnType<EhClient["searchFavorites"]>;
-  getGalleryPages(ref: GalleryRef, site?: EhSite, previewPage?: number): ReturnType<EhClient["getGalleryPages"]>;
-  getAllGalleryPages(ref: GalleryRef, site?: EhSite, maxImages?: number): ReturnType<EhClient["getAllGalleryPages"]>;
-  getImagePage(ref: PageRef, site?: EhSite): ReturnType<EhClient["getImagePage"]>;
-  getGalleryDetail(ref: GalleryRef, site?: EhSite): ReturnType<EhClient["getGalleryDetail"]>;
-  getGalleryComments(ref: GalleryRef, site?: EhSite, includeHidden?: boolean): ReturnType<EhClient["getGalleryComments"]>;
-  getTorrents(ref: GalleryRef, site?: EhSite): ReturnType<EhClient["getTorrents"]>;
-  checkAccess(site?: EhSite): ReturnType<EhClient["checkAccess"]>;
-  getGalleryChain(ref: GalleryRef, site?: EhSite): ReturnType<EhClient["getGalleryChain"]>;
-  findLatestGalleryVersion(ref: GalleryRef, site?: EhSite): ReturnType<EhClient["findLatestGalleryVersion"]>;
-  compareGalleryVersions(before: GalleryRef, after: GalleryRef, site?: EhSite): ReturnType<EhClient["compareGalleryVersions"]>;
-  resolveGalleryToken(ref: PageRef, site?: EhSite): ReturnType<EhClient["resolveGalleryToken"]>;
-  resolveGalleryTokensBatch(entries: PageRef[], site?: EhSite): ReturnType<EhClient["resolveGalleryTokensBatch"]>;
-  getFavoriteCategories(site?: EhSite): ReturnType<EhClient["getFavoriteCategories"]>;
-  getFavoriteDetail(ref: GalleryRef, site?: EhSite): ReturnType<EhClient["getFavoriteDetail"]>;
-  getArchiveOptions(ref: GalleryRef, site?: EhSite): ReturnType<EhClient["getArchiveOptions"]>;
-  lookupTagDefinition(tag: string): ReturnType<EhClient["lookupTagDefinition"]>;
-  searchTranslatedTags(query: string, limit?: number): ReturnType<EhClient["searchTranslatedTags"]>;
-}
+import { siteSchema, siteInput, gallerySchema, pageSchema, annotations, searchInputShape, accessOutputSchema } from "./server/schemas.js";
+import { registerDiagnosticTools } from "./server/tools/diagnostics.js";
 
 const gallerySummarySchema = gallerySchema.extend({
   site: siteSchema,
@@ -221,15 +191,6 @@ const translatedTagsOutputSchema = z.object({ result: z.object({
     searchQuery: z.string(),
     match: z.enum(["name-exact", "tag-exact", "name-contains", "tag-contains"]),
   })),
-}) });
-const accessOutputSchema = z.object({ result: z.object({
-  site: siteSchema,
-  credentialsProvided: z.boolean(),
-  authenticated: z.boolean().nullable(),
-  reachable: z.boolean().nullable(),
-  cloudflareChallenge: z.boolean(),
-  status: z.number().int().nullable(),
-  message: z.string(),
 }) });
 const detailOutputSchema = z.object({ result: z.object({
   gallery: z.object({
@@ -545,23 +506,7 @@ export function createServer(backend: EhBackend): McpServer {
     },
   );
 
-  server.registerTool(
-    "eh_check_access",
-    {
-      title: "Check E-Hentai access",
-      description: "Diagnose reachability, authentication state, and Cloudflare challenge state for E-Hentai or ExHentai.",
-      inputSchema: z.object({ site: siteInput }),
-      outputSchema: accessOutputSchema,
-      annotations,
-    },
-    async ({ site }) => {
-      try {
-        return success("result", await backend.checkAccess(site));
-      } catch (error) {
-        return toolError(error);
-      }
-    },
-  );
+  registerDiagnosticTools(server, backend);
 
   server.registerTool(
     "eh_get_gallery_chain",
