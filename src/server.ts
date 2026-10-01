@@ -7,26 +7,9 @@ import { buildStructuredSearchQuery, getSearchCapabilities } from "./search-tool
 import { VERSION } from "./version.js";
 import { registerPrompts } from "./server/prompts.js";
 import { success, successValue, toolError } from "./server/helpers.js";
-import { siteSchema, siteInput, gallerySchema, pageSchema, annotations, searchInputShape, accessOutputSchema } from "./server/schemas.js";
+import { siteSchema, siteInput, gallerySchema, pageSchema, annotations, searchInputShape, accessOutputSchema, gallerySummarySchema, galleryListSchema, galleryListOutputSchema, galleryBatchSearchOutputSchema } from "./server/schemas.js";
 import { registerDiagnosticTools } from "./server/tools/diagnostics.js";
 
-const gallerySummarySchema = gallerySchema.extend({
-  site: siteSchema,
-  url: z.string().url(),
-  title: z.string(),
-  category: z.string(),
-  uploader: z.string().nullable(),
-  posted: z.string().nullable(),
-  pages: z.number().int().nullable(),
-  rating: z.number().nullable(),
-  tags: z.array(z.string()),
-  thumbnailUrl: z.string().url().nullable(),
-});
-const galleryListSchema = z.object({
-  galleries: z.array(gallerySummarySchema),
-  prev: z.string().nullable(),
-  next: z.string().nullable(),
-});
 const torrentSchema = z.object({
   hash: z.string(),
   added: z.string(),
@@ -76,7 +59,6 @@ const imagePageSchema = z.object({
   nextPageUrl: z.string().url().nullable(),
   previousPageUrl: z.string().url().nullable(),
 });
-const galleryListOutputSchema = z.object({ result: galleryListSchema });
 const similarGalleryOutputSchema = z.object({ result: z.object({
   strategy: z.enum(["title", "artist", "uploader"]),
   query: z.string(),
@@ -262,16 +244,7 @@ export function createServer(backend: EhBackend): McpServer {
         maxPages: z.number().int().min(1).max(10).default(5).describe("Maximum result pages to scan"),
         next: z.string().optional().describe("Resume cursor returned by a previous truncated batch search"),
       }),
-      outputSchema: z.object({ result: z.object({
-        galleries: z.array(gallerySummarySchema),
-        inputCount: z.number().int().nonnegative(),
-        pagesScanned: z.number().int().positive(),
-        resultCount: z.number().int().nonnegative(),
-        errorCount: z.literal(0),
-        preservedOrder: z.literal(true),
-        truncated: z.boolean(),
-        next: z.string().nullable(),
-      }) }),
+      outputSchema: galleryBatchSearchOutputSchema,
       annotations,
     },
     async (input) => {

@@ -29,6 +29,34 @@ export const accessOutputSchema = z.object({ result: z.object({
   message: z.string(),
 }) });
 
+export const gallerySummarySchema = gallerySchema.extend({
+  site: siteSchema,
+  url: z.string().url(),
+  title: z.string(),
+  category: z.string(),
+  uploader: z.string().nullable(),
+  posted: z.string().nullable(),
+  pages: z.number().int().nullable(),
+  rating: z.number().nullable(),
+  tags: z.array(z.string()),
+  thumbnailUrl: z.string().url().nullable(),
+});
+export const galleryListSchema = z.object({
+  galleries: z.array(gallerySummarySchema),
+  prev: z.string().nullable(),
+  next: z.string().nullable(),
+});
+export const galleryListOutputSchema = z.object({ result: galleryListSchema });
+export const galleryBatchSearchOutputSchema = z.object({ result: z.object({
+  galleries: z.array(gallerySummarySchema),
+  inputCount: z.number().int().nonnegative(),
+  pagesScanned: z.number().int().positive(),
+  resultCount: z.number().int().nonnegative(),
+  errorCount: z.literal(0),
+  preservedOrder: z.literal(true),
+  truncated: z.boolean(),
+  next: z.string().nullable(),
+}) });
 export const searchInputShape = {
   site: siteInput,
   query: z.string().max(200).optional().describe("Native E-Hentai query, e.g. language:chinese$ artist:name$"),
