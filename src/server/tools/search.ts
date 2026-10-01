@@ -4,10 +4,15 @@ import type { EhBackend } from "../backend.js";
 import { success, toolError } from "../helpers.js";
 import {
   annotations,
+  capabilitiesOutputSchema,
+  fileSearchOutputSchema,
   galleryBatchSearchOutputSchema,
   galleryListOutputSchema,
+  queryOutputSchema,
   searchInputShape,
+  siteInput,
 } from "../schemas.js";
+import { buildStructuredSearchQuery, getSearchCapabilities } from "../../search-tools.js";
 
 export function registerSearchTools(server: McpServer, backend: EhBackend): void {
   server.registerTool(
@@ -64,5 +69,65 @@ export function registerSearchTools(server: McpServer, backend: EhBackend): void
     async (input) => {
       try { return success("result", await backend.searchWatched(input)); } catch (error) { return toolError(error); }
     },
+  );
+
+  server.registerTool(
+    "eh_search_by_hash",
+    {
+      title: "Search by image SHA-1",
+      description: "Search E-Hentai by an exact 40-character SHA-1 image hash without uploading the image.",
+      inputSchema: z.object({ site: siteInput, sha1: z.string().regex(/^[0-9a-f]{40}$/i).describe("Exact 40-character hexadecimal SHA-1 hash of an image") }),
+      outputSchema: galleryListOutputSchema,
+      annotations,
+    },
+    async ({ sha1, site }) => {
+      try { return success("result", await backend.searchByHash(sha1, site)); } catch (error) { return toolError(error); }
+    },
+  );
+
+  server.registerTool(
+    "eh_search_by_file",
+    {
+      title: "Search by local image file",
+      description: "Read one explicitly provided absolute local file, calculate SHA-1 locally, and perform exact image search. The file is never uploaded.",
+      inputSchema: z.object({ site: siteInput, path: z.string().min(1).describe("Absolute path to one user-selected regular file; directories and wildcards are rejected") }),
+      outputSchema: fileSearchOutputSchema,
+      annotations,
+    },
+    async ({ path, site }) => {
+      try { return success("result", await backend.searchByFile(path, site)); } catch (error) { return toolError(error); }
+    },
+  );
+
+  server.registerTool(
+    "eh_build_search_query",
+    {
+      title: "Build an E-Hentai search query",
+      description: "Build and validate native search syntax from structured include, exclude, OR, exact-tag, and title conditions without making a network request.",
+      inputSchema: z.object({
+        includeTags: z.array(z.string()).max(5).optional().describe("Up to 5 tags that every result must include"),
+        excludeTags: z.array(z.string()).max(10).optional().describe("Up to 10 tags that results must exclude"),
+        orTags: z.array(z.string()).max(10).optional().describe("Up to 10 tags combined as an OR condition"),
+        title: z.string().optional().describe("Optional title condition"),
+        exactTags: z.boolean().default(false).describe("Use exact tag matching when true"),
+      }),
+      outputSchema: queryOutputSchema,
+      annotations,
+    },
+    async (input) => {
+      try { return success("result", buildStructuredSearchQuery(input)); } catch (error) { return toolError(error); }
+    },
+  );
+
+  server.registerTool(
+    "eh_get_search_capabilities",
+    {
+      title: "Get E-Hentai search capabilities",
+      description: "Return supported categories, namespaces, qualifiers, operators, and official query limits without making a network request.",
+      inputSchema: z.object({}),
+      outputSchema: capabilitiesOutputSchema,
+      annotations,
+    },
+    async () => success("result", getSearchCapabilities()),
   );
 }
