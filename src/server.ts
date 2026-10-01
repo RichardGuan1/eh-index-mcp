@@ -8,6 +8,7 @@ import { VERSION } from "./version.js";
 import { registerPrompts } from "./server/prompts.js";
 import { success, successValue, toolError } from "./server/helpers.js";
 import { siteSchema, siteInput, gallerySchema, pageSchema, annotations, searchInputShape, accessOutputSchema, gallerySummarySchema, galleryListSchema, galleryListOutputSchema, galleryBatchSearchOutputSchema } from "./server/schemas.js";
+import { registerSearchTools } from "./server/tools/search.js";
 import { registerDiagnosticTools } from "./server/tools/diagnostics.js";
 
 const torrentSchema = z.object({
@@ -211,73 +212,7 @@ const capabilitiesOutputSchema = z.object({ result: z.object({
 export function createServer(backend: EhBackend): McpServer {
   const server = new McpServer({ name: "eh-index-mcp", version: VERSION });
 
-  server.registerTool(
-    "eh_search_galleries",
-    {
-      title: "Search E-Hentai galleries",
-      description: "Search E-Hentai or ExHentai with native title and tag syntax plus optional category, rating, page-count, torrent, expunged, and cursor filters. Use namespace-qualified tags such as artist:name or female:tag when needed. For translated Chinese or English tag names, resolve the native tag token with eh_search_translated_tags first; native tags can be passed directly.",
-      inputSchema: z.object({
-        ...searchInputShape,
-        prev: z.string().optional().describe("Previous-page cursor returned by this tool"),
-        next: z.string().optional().describe("Next-page cursor returned by this tool"),
-        seek: z.string().optional().describe("E-Hentai seek value, such as a date or gallery ID"),
-      }),
-      outputSchema: galleryListOutputSchema,
-      annotations,
-    },
-    async (input) => {
-      try {
-        return success("result", await backend.search(input));
-      } catch (error) {
-        return toolError(error);
-      }
-    },
-  );
-
-  server.registerTool(
-    "eh_search_galleries_batch",
-    {
-      title: "Search galleries across pages",
-      description: "Search up to 10 result pages without metadata expansion, deduplicate gallery references, and return a resume cursor when the page budget truncates the scan.",
-      inputSchema: z.object({
-        ...searchInputShape,
-        maxPages: z.number().int().min(1).max(10).default(5).describe("Maximum result pages to scan"),
-        next: z.string().optional().describe("Resume cursor returned by a previous truncated batch search"),
-      }),
-      outputSchema: galleryBatchSearchOutputSchema,
-      annotations,
-    },
-    async (input) => {
-      try {
-        return success("result", await backend.searchBatch(input));
-      } catch (error) {
-        return toolError(error);
-      }
-    },
-  );
-
-  server.registerTool(
-    "eh_search_watched",
-    {
-      title: "Search watched-tag galleries",
-      description: "Read the authenticated user's watched-tag gallery feed with native search, category, advanced-filter, and cursor controls. This tool never changes watched tags or account settings.",
-      inputSchema: z.object({
-        ...searchInputShape,
-        prev: z.string().optional().describe("Previous-page cursor returned by this tool"),
-        next: z.string().optional().describe("Next-page cursor returned by this tool"),
-        seek: z.string().optional().describe("E-Hentai seek value, such as a date or gallery ID"),
-      }),
-      outputSchema: galleryListOutputSchema,
-      annotations,
-    },
-    async (input) => {
-      try {
-        return success("result", await backend.searchWatched(input));
-      } catch (error) {
-        return toolError(error);
-      }
-    },
-  );
+  registerSearchTools(server, backend);
 
   server.registerTool(
     "eh_find_similar_galleries",
