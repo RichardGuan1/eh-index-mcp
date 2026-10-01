@@ -69,6 +69,16 @@ export const similarGalleryOutputSchema = z.object({ result: z.object({
   query: z.string(),
   result: galleryListSchema,
 }) });
+export const galleryPagesSchema = z.object({
+  totalPages: z.number().int().positive(),
+  pages: z.array(z.object({
+    page: z.number().int().positive(),
+    pageToken: z.string(),
+    url: z.string().url(),
+    thumbnailUrl: z.string().url().nullable(),
+    thumbnailOffsetX: z.number().int().nullable(),
+  })),
+});
 export const galleryWorkSearchOutputSchema = z.object({ result: z.object({
   pagesScanned: z.number().int().positive(),
   searchedGalleryCount: z.number().int().nonnegative(),
@@ -87,6 +97,19 @@ export const galleryWorkSearchOutputSchema = z.object({ result: z.object({
     })),
   })),
 }) });
+export const galleryPagesOutputSchema = z.object({ result: galleryPagesSchema });
+
+export const commentsOutputSchema = z.object({ result: z.object({
+  comments: z.array(z.object({ id: z.number().int().nonnegative(), author: z.string().nullable(), posted: z.string().nullable(), score: z.number().int().nullable(), uploaderComment: z.boolean(), text: z.string(), votes: z.string().nullable(), untrusted: z.literal(true) })),
+  includeHidden: z.boolean(),
+}) });
+export const detailOutputSchema = z.object({ result: z.object({
+  gallery: z.object({ gid: z.number().int(), token: z.string(), title: z.string(), titleJpn: z.string().nullable(), category: z.string(), uploader: z.string().nullable(), posted: z.string().nullable(), parent: gallerySchema.nullable(), visible: z.string().nullable(), language: z.string().nullable(), fileSize: z.string().nullable(), pages: z.number().int().nullable(), favoriteCount: z.number().int(), rating: z.number().nullable(), ratingCount: z.number().int().nullable(), torrentCount: z.number().int() }),
+  description: z.object({ text: z.string(), untrusted: z.literal(true) }).nullable(), tagGroups: z.array(z.object({ namespace: z.string(), tags: z.array(z.object({ name: z.string(), strength: z.enum(["solid", "weak", "active"]) })) })), newerVersions: z.array(gallerySchema.extend({ title: z.string(), added: z.string() })),
+}) });
+export const metadataSingleOutputSchema = z.object({ galleries: z.array(z.object({ gid: z.number(), token: z.string().optional(), error: z.string().optional() }).passthrough()) });
+export const metadataBatchOutputSchema = z.object({ galleries: z.array(z.object({ gid: z.number(), token: z.string().optional(), error: z.string().optional() }).passthrough()), inputCount: z.number().int(), successCount: z.number().int(), errorCount: z.number().int(), preservedOrder: z.literal(true) });
+export const torrentOutputSchema = z.object({ torrents: z.array(z.object({ id: z.number().int(), name: z.string(), url: z.string().url(), posted: z.string(), size: z.string(), seeds: z.number().int(), peers: z.number().int(), downloads: z.number().int(), uploader: z.string().nullable(), outdated: z.boolean() })) });
 
 export const searchInputShape = {
   site: siteInput,
