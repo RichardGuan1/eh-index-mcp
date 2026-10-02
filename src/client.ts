@@ -43,7 +43,7 @@ import { parseTagTranslationDatabase, searchTranslatedTags } from "./tag-transla
 import { organizeGalleryWorks } from "./gallery-works.js";
 import { extractSimilarGalleryTitle } from "./gallery-title.js";
 import { VERSION } from "./version.js";
-import { EhError, networkErrorContext } from "./errors.js";
+import { EhError } from "./errors.js";
 import { isLoginPage, authRejected, authRequired, validateCookies } from "./client/auth.js";
 import { matchMetadataEntries, summarizeMetadataBatch } from "./client/metadata.js";
 import { pageRefKey, summarizeTokenBatch } from "./client/resolution.js";
@@ -51,7 +51,8 @@ import { collectGallerySearchPages, toBatchSearchResult } from "./client/search.
 import { galleryPagesCacheKey, imagePageCacheKey, combineGalleryPages } from "./client/pages.js";
 import { addGalleryCandidate, compareGalleryMetadata } from "./client/versions.js";
 import { tagDefinitionCacheKey, tagDefinitionUrl, galleryCacheKey } from "./client/domain.js";
-import { HttpStatusError, readTextWithLimit, retryAfterMilliseconds, serializeCookies, sleepWithSignal } from "./client/request.js";
+import { createHttpRequester, HttpStatusError } from "./client/http.js";
+import { readTextWithLimit, retryAfterMilliseconds, serializeCookies, sleepWithSignal } from "./client/request.js";
 const TAG_TRANSLATION_DATABASE_URL = "https://raw.githubusercontent.com/EhTagTranslation/Database/release/db.text.json";
 const TAG_TRANSLATION_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
 const TAG_TRANSLATION_MAX_BYTES = 8 * 1024 * 1024;
@@ -96,6 +97,7 @@ export class EhClient {
   readonly #popularCacheTtlMs: number;
   readonly #longCacheTtlMs: number;
   readonly #maxLocalFileBytes: number;
+  readonly #httpRequest: (url: string, site: EhSite, init?: RequestInit) => Promise<Response>;
 
   constructor(options: EhClientOptions = {}) {
     validateCookies(options.cookies);
@@ -112,6 +114,14 @@ export class EhClient {
     this.#popularCacheTtlMs = options.popularCacheTtlMs ?? 60_000;
     this.#longCacheTtlMs = options.longCacheTtlMs ?? 300_000;
     this.#maxLocalFileBytes = options.maxLocalFileBytes ?? 32 * 1024 * 1024;
+    this.#httpRequest = createHttpRequester({
+      fetch: this.#fetch,
+      cookies: this.#cookies,
+      userAgent: this.#userAgent,
+      timeoutMs: this.#timeoutMs,
+      maxRetries: this.#maxRetries,
+      retryBaseMs: this.#retryBaseMs,
+    });
   }
 
   #cached<T>(key: string, ttlMs: number, loader: () => Promise<T>): Promise<T> {
@@ -119,62 +129,7 @@ export class EhClient {
   }
 
   async #request(url: string, site: EhSite, init: RequestInit = {}): Promise<Response> {
-    if (site === "exhentai" && (!this.#cookies?.memberId || !this.#cookies.passHash || !this.#cookies.igneous)) {
-      throw new EhError("AUTH_REQUIRED", "ExHentai requires EH_MEMBER_ID, EH_PASS_HASH, and EH_IGNEOUS credentials", {
-        retryable: false,
-        site,
-        stage: "http-request",
-      });
-    }
-    const headers = new Headers(init.headers);
-    headers.set("user-agent", this.#userAgent);
-    headers.set("accept", "text/html,application/json;q=0.9,*/*;q=0.8");
-    const hostname = new URL(url).hostname.toLowerCase();
-    const isEhentaiHost = hostname === "e-hentai.org" || hostname.endsWith(".e-hentai.org")
-      || hostname === "exhentai.org" || hostname.endsWith(".exhentai.org");
-    const cookie = isEhentaiHost ? serializeCookies(this.#cookies, site) : null;
-    if (cookie) headers.set("cookie", cookie);
-
-    const timeoutSignal = AbortSignal.timeout(this.#timeoutMs);
-    const signal = init.signal ? AbortSignal.any([init.signal, timeoutSignal]) : timeoutSignal;
-    for (let attempt = 0; ; attempt += 1) {
-      let response: Response;
-      try {
-        response = await this.#fetch(url, { ...init, headers, signal });
-      } catch (error) {
-        if (timeoutSignal.aborted) {
-          throw new EhError("NETWORK_ERROR", `E-Hentai request timed out after ${this.#timeoutMs}ms`, {
-            retryable: true,
-            site,
-            stage: "http-request",
-            cause: error,
-          });
-        }
-        throw networkErrorContext(error, { site, stage: "http-request" });
-      }
-      if (response.ok) return response;
-      const retryable = response.status === 429 || response.status === 502 || response.status === 503 || response.status === 504;
-      if (retryable && attempt < this.#maxRetries) {
-        const delay = retryAfterMilliseconds(response) ?? this.#retryBaseMs * (2 ** attempt);
-        if (delay > 0) {
-          try {
-            await sleepWithSignal(delay, signal);
-          } catch (error) {
-            if (timeoutSignal.aborted) {
-              throw new EhError("NETWORK_ERROR", `E-Hentai request timed out after ${this.#timeoutMs}ms`, {
-                retryable: true,
-                site,
-                stage: "http-request",
-                cause: error,
-              });
-            }
-            throw networkErrorContext(error, { site, stage: "http-request" });
-          }
-        }
-        continue;
-      }
-      throw new HttpStatusError(site, response.status, response.statusText);
-    }
+    return this.#httpRequest(url, site, init);
   }
 
   async #readJson<T>(response: Response, site: EhSite): Promise<T> {
