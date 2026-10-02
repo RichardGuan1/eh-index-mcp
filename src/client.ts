@@ -50,7 +50,7 @@ import { pageRefKey, summarizeTokenBatch } from "./client/resolution.js";
 import { collectGallerySearchPages, toBatchSearchResult } from "./client/search.js";
 import { galleryPagesCacheKey, imagePageCacheKey, combineGalleryPages } from "./client/pages.js";
 import { addGalleryCandidate, compareGalleryMetadata } from "./client/versions.js";
-import { tagDefinitionCacheKey, tagDefinitionUrl, galleryCacheKey } from "./client/domain.js";
+import { tagDefinitionCacheKey, tagDefinitionUrl, galleryCacheKey, popularCacheKey } from "./client/domain.js";
 import { createHttpRequester, HttpStatusError } from "./client/http.js";
 import { readTextWithLimit, retryAfterMilliseconds, serializeCookies, sleepWithSignal } from "./client/request.js";
 const TAG_TRANSLATION_DATABASE_URL = "https://raw.githubusercontent.com/EhTagTranslation/Database/release/db.text.json";
@@ -409,7 +409,7 @@ export class EhClient {
   }
 
   async popular(site: EhSite = "e-hentai"): Promise<GalleryListResult> {
-    return this.#cached(`popular:${site}`, this.#popularCacheTtlMs, () => this.#pageLimiter.run(async () => {
+    return this.#cached(popularCacheKey(site), this.#popularCacheTtlMs, () => this.#pageLimiter.run(async () => {
       const response = await this.#request(`https://${site === "exhentai" ? "exhentai.org" : "e-hentai.org"}/popular`, site);
       return parseGalleryList(await response.text(), site);
     }));

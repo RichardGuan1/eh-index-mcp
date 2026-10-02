@@ -12,6 +12,6 @@ export function galleryCacheKey(kind: string, site: EhSite, ref: GalleryRef, suf
   return `${kind}:${site}:${ref.gid}:${ref.token}${suffix}`;
 }
 
-export function pageCacheKey(kind: string, site: EhSite, ref: PageRef): string {
-  return `${kind}:${site}:${ref.gid}:${ref.pageToken}:${ref.page}`;
+export function popularCacheKey(site: EhSite): string {
+  return `popular:${site}`;
 }
