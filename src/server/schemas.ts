@@ -99,6 +99,11 @@ export const galleryWorkSearchOutputSchema = z.object({ result: z.object({
 }) });
 export const galleryPagesOutputSchema = z.object({ result: galleryPagesSchema });
 
+export const allPagesOutputSchema = z.object({ result: galleryPagesSchema.extend({ previewPagesFetched: z.number().int().positive() }) });
+export const imagePageOutputSchema = z.object({ result: z.object({ imageUrl: z.string().url(), originalImageUrl: z.string().url().nullable(), showKey: z.string().nullable(), skipHathKey: z.string().nullable(), nextPageUrl: z.string().url().nullable(), previousPageUrl: z.string().url().nullable() }) });
+export const resolvedGalleryOutputSchema = z.object({ gallery: gallerySchema });
+export const resolvedGalleryBatchOutputSchema = z.object({ results: z.array(pageSchema.extend({ token: z.string().regex(/^[0-9a-f]{10}$/i).optional(), error: z.string().optional() })), inputCount: z.number().int(), successCount: z.number().int(), errorCount: z.number().int(), preservedOrder: z.literal(true) });
+
 export const commentsOutputSchema = z.object({ result: z.object({
   comments: z.array(z.object({ id: z.number().int().nonnegative(), author: z.string().nullable(), posted: z.string().nullable(), score: z.number().int().nullable(), uploaderComment: z.boolean(), text: z.string(), votes: z.string().nullable(), untrusted: z.literal(true) })),
   includeHidden: z.boolean(),
