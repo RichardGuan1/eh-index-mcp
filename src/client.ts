@@ -48,7 +48,7 @@ import { isLoginPage, authRejected, authRequired, validateCookies } from "./clie
 import { matchMetadataEntries, summarizeMetadataBatch, pageRefKey, summarizeTokenBatch } from "./client/metadata.js";
 import { collectGallerySearchPages, toBatchSearchResult } from "./client/search.js";
 import { galleryPagesCacheKey, imagePageCacheKey, combineGalleryPages } from "./client/pages.js";
-import { addGalleryCandidate, compareGalleryMetadata } from "./client/versions.js";
+import { addGalleryCandidate, compareGalleryMetadata } from "./client/search.js";
 import { tagDefinitionCacheKey, tagDefinitionUrl, galleryCacheKey, popularCacheKey } from "./client/pages.js";
 import { createHttpRequester, HttpStatusError, readTextWithLimit, retryAfterMilliseconds, serializeCookies, sleepWithSignal } from "./client/transport.js";
 const TAG_TRANSLATION_DATABASE_URL = "https://raw.githubusercontent.com/EhTagTranslation/Database/release/db.text.json";
