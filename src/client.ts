@@ -47,6 +47,7 @@ import { EhError, networkErrorContext } from "./errors.js";
 import { isLoginPage, authRejected, authRequired, validateCookies } from "./client/auth.js";
 import { matchMetadataEntries, summarizeMetadataBatch } from "./client/metadata.js";
 import { pageRefKey, summarizeTokenBatch } from "./client/resolution.js";
+import { collectGallerySearchPages, toBatchSearchResult } from "./client/search.js";
 import { HttpStatusError, readTextWithLimit, retryAfterMilliseconds, serializeCookies, sleepWithSignal } from "./client/request.js";
 const TAG_TRANSLATION_DATABASE_URL = "https://raw.githubusercontent.com/EhTagTranslation/Database/release/db.text.json";
 const TAG_TRANSLATION_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
@@ -312,40 +313,8 @@ export class EhClient {
   }
 
   async searchBatch(options: GalleryBatchSearchOptions): Promise<GalleryBatchSearchResult> {
-    const maxPages = options.maxPages ?? 5;
-    if (!Number.isInteger(maxPages) || maxPages < 1 || maxPages > 10) {
-      throw new Error("maxPages must be an integer from 1 to 10");
-    }
-    const { maxPages: _maxPages, next: initialNext, ...searchOptions } = options;
-    const galleries = new Map<string, GalleryListResult["galleries"][number]>();
-    const seenCursors = new Set<string>();
-    let next = initialNext ?? null;
-    let pagesScanned = 0;
-
-    for (; pagesScanned < maxPages; pagesScanned += 1) {
-      if (next) {
-        if (seenCursors.has(next)) throw new Error(`Search cursor repeated: ${next}`);
-        seenCursors.add(next);
-      }
-      const page = await this.search({ ...searchOptions, ...(next ? { next } : {}) });
-      for (const gallery of page.galleries) galleries.set(`${gallery.gid}:${gallery.token.toLowerCase()}`, gallery);
-      next = page.next;
-      if (!next) {
-        pagesScanned += 1;
-        break;
-      }
-    }
-
-    return {
-      galleries: [...galleries.values()],
-      inputCount: galleries.size,
-      pagesScanned,
-      resultCount: galleries.size,
-      errorCount: 0,
-      preservedOrder: true,
-      truncated: next !== null,
-      next,
-    };
+    const { galleries, pagesScanned, next } = await collectGallerySearchPages(options, (searchOptions) => this.search(searchOptions as SearchOptions));
+    return toBatchSearchResult(galleries, pagesScanned, next);
   }
 
   async findSimilarGalleries(ref: GalleryRef, site: EhSite = "e-hentai"): Promise<SimilarGallerySearchResult> {
