@@ -1,4 +1,20 @@
-import type { GalleryPagePreview, GalleryPagesResult } from "../types.js";
+import type { EhSite, GalleryRef, GalleryPagesResult } from "../types.js";
+
+export function tagDefinitionCacheKey(tag: string): string {
+  return `tag-definition:${tag.replace(/\s+/g, "_").toLowerCase()}`;
+}
+
+export function tagDefinitionUrl(tag: string): string {
+  return `https://ehwiki.org/wiki/${encodeURIComponent(tag.replace(/\s+/g, "_"))}`;
+}
+
+export function galleryCacheKey(kind: string, site: EhSite, ref: GalleryRef, suffix = ""): string {
+  return `${kind}:${site}:${ref.gid}:${ref.token}${suffix}`;
+}
+
+export function popularCacheKey(site: EhSite): string {
+  return `popular:${site}`;
+}
 
 export function galleryPagesCacheKey(site: string, gid: number, token: string, previewPage: number): string {
   return `pages:${site}:${gid}:${token}:${previewPage}`;
