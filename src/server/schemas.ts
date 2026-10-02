@@ -111,6 +111,10 @@ export const metadataSingleOutputSchema = z.object({ galleries: z.array(z.object
 export const metadataBatchOutputSchema = z.object({ galleries: z.array(z.object({ gid: z.number(), token: z.string().optional(), error: z.string().optional() }).passthrough()), inputCount: z.number().int(), successCount: z.number().int(), errorCount: z.number().int(), preservedOrder: z.literal(true) });
 export const torrentOutputSchema = z.object({ torrents: z.array(z.object({ id: z.number().int(), name: z.string(), url: z.string().url(), posted: z.string(), size: z.string(), seeds: z.number().int(), peers: z.number().int(), downloads: z.number().int(), uploader: z.string().nullable(), outdated: z.boolean() })) });
 
+export const chainOutputSchema = z.object({ galleries: z.array(z.object({ gid: z.number(), token: z.string().optional(), error: z.string().optional() }).passthrough()) });
+export const latestOutputSchema = z.object({ gallery: z.object({ gid: z.number(), token: z.string().optional(), error: z.string().optional() }).passthrough() });
+export const versionComparisonOutputSchema = z.object({ result: z.object({ before: z.object({ gid: z.number() }).passthrough(), after: z.object({ gid: z.number() }).passthrough(), changes: z.object({ title: z.object({ before: z.string().nullable(), after: z.string().nullable() }), posted: z.object({ before: z.string().nullable(), after: z.string().nullable() }), filecount: z.object({ before: z.number().nullable(), after: z.number().nullable(), delta: z.number().nullable() }), filesize: z.object({ before: z.number().nullable(), after: z.number().nullable(), delta: z.number().nullable() }), tagsAdded: z.array(z.string()), tagsRemoved: z.array(z.string()) }) }) });
+
 export const searchInputShape = {
   site: siteInput,
   query: z.string().max(200).optional().describe("Native E-Hentai query, e.g. language:chinese$ artist:name$"),
