@@ -1,27 +1,5 @@
-export type EhSite = "e-hentai" | "exhentai";
-
-export type GalleryCategory =
-  | "misc"
-  | "doujinshi"
-  | "manga"
-  | "artist-cg"
-  | "game-cg"
-  | "western"
-  | "non-h"
-  | "image-set"
-  | "cosplay"
-  | "asian-porn";
-
-export interface GalleryRef {
-  gid: number;
-  token: string;
-}
-
-export interface PageRef {
-  gid: number;
-  pageToken: string;
-  page: number;
-}
+import type { EhSite, GalleryCategory, GalleryRef, PageRef } from "./types/common.js";
+export * from "./types/common.js";
 
 export interface GalleryTokenResolution extends PageRef {
   token?: string;
@@ -246,13 +224,6 @@ export interface ArchiveOption {
 export interface ArchiveOptionsResult {
   balance: string | null;
   options: ArchiveOption[];
-}
-
-export interface IdentityCookies {
-  memberId?: string;
-  passHash?: string;
-  igneous?: string;
-  cfClearance?: string;
 }
 
 export interface TorrentMetadata {
