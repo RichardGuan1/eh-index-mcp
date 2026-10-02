@@ -346,31 +346,8 @@ export class EhClient {
   }
 
   async searchGalleryWorks(options: GalleryWorkSearchOptions): Promise<GalleryWorkSearchResult> {
-    const maxPages = options.maxPages ?? 5;
-    if (!Number.isInteger(maxPages) || maxPages < 1 || maxPages > 10) {
-      throw new Error("maxPages must be an integer from 1 to 10");
-    }
+    const { galleries, pagesScanned, next } = await collectGallerySearchPages(options, (searchOptions) => this.search({ ...searchOptions, site: options.site ?? "e-hentai" } as SearchOptions));
     const site = options.site ?? "e-hentai";
-    const { maxPages: _maxPages, next: initialNext, ...searchOptions } = options;
-    const galleries: GalleryListResult["galleries"] = [];
-    const seenCursors = new Set<string>();
-    let next = initialNext ?? null;
-    let pagesScanned = 0;
-
-    for (; pagesScanned < maxPages; pagesScanned += 1) {
-      if (next) {
-        if (seenCursors.has(next)) throw new Error(`Search cursor repeated: ${next}`);
-        seenCursors.add(next);
-      }
-      const page = await this.search({ ...searchOptions, site, ...(next ? { next } : {}) });
-      galleries.push(...page.galleries);
-      next = page.next;
-      if (!next) {
-        pagesScanned += 1;
-        break;
-      }
-    }
-
     const refs = [...new Map(galleries.map((gallery) => [`${gallery.gid}:${gallery.token.toLowerCase()}`, {
       gid: gallery.gid,
       token: gallery.token,
