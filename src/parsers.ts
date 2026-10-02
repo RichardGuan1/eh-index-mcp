@@ -22,6 +22,7 @@ import { assertNotChallengePage } from "./parsers/shared.js";
 export { assertNotChallengePage } from "./parsers/shared.js";
 export { parseGalleryComments, parseTorrents } from "./parsers/comments-torrents.js";
 export { parseImagePage } from "./parsers/image-page.js";
+export { parseGalleryPages } from "./parsers/gallery-pages.js";
 
 function cursorFromHref(href: string | undefined, key: "prev" | "next"): string | null {
   if (!href) return null;
@@ -356,31 +357,4 @@ export function parseGalleryDetail(html: string, expectedRef?: GalleryRef, site:
     tagGroups,
     newerVersions,
   };
-}
-
-export function parseGalleryPages(html: string, site: EhSite = "e-hentai"): GalleryPagesResult {
-  assertNotChallengePage(html, site);
-  const $ = load(html);
-  const totalMatch = $("#gdd").text().match(/Length:\s*(\d+)\s+pages?/i);
-  if (!totalMatch) throw new Error("Could not determine the gallery page count");
-
-  const pages = $("#gdt a[href*='/s/']").map((_, anchor) => {
-    const baseUrl = site === "exhentai" ? "https://exhentai.org" : "https://e-hentai.org";
-    const href = new URL($(anchor).attr("href")!, baseUrl).toString();
-    const ref = parsePageUrl(href);
-    const child = $(anchor).find("div").first();
-    const style = child.attr("style") ?? "";
-    const image = $(anchor).find("img").first();
-    const background = /url\((?:["']?)(https?:\/\/[^)'"\s]+)(?:["']?)\)/i.exec(style);
-    const offset = /\)\s+-(\d+)px\s+/i.exec(style);
-    return {
-      page: ref.page,
-      pageToken: ref.pageToken,
-      url: href,
-      thumbnailUrl: image.attr("src") ?? image.attr("data-src") ?? background?.[1] ?? null,
-      thumbnailOffsetX: offset ? Number(offset[1]) : null,
-    };
-  }).get();
-
-  return { totalPages: Number(totalMatch[1]), pages };
 }
