@@ -1,4 +1,4 @@
-import type { GalleryMetadata, GalleryMetadataBatchResult, GalleryRef } from "../types.js";
+import type { GalleryMetadata, GalleryMetadataBatchResult, GalleryRef, GalleryTokenBatchResult, GalleryTokenResolution, PageRef } from "../types.js";
 
 export function matchMetadataEntries(metadata: GalleryMetadata[], entries: GalleryRef[]): GalleryMetadata[] {
   const refKey = ({ gid, token }: GalleryRef) => `${gid}:${token.toLowerCase()}`;
@@ -13,17 +13,17 @@ export function matchMetadataEntries(metadata: GalleryMetadata[], entries: Galle
 export function summarizeMetadataBatch(results: GalleryMetadata[], entries: GalleryRef[]): GalleryMetadataBatchResult {
   const byKey = new Map(results.map((entry) => [`${entry.gid}:${entry.token?.toLowerCase() ?? ""}`, entry]));
   const byGid = new Map(results.map((entry) => [Number(entry.gid), entry]));
-  const galleries = entries.map((entry) => byKey.get(`${entry.gid}:${entry.token.toLowerCase()}`) ?? byGid.get(entry.gid) ?? {
-    gid: entry.gid,
-    token: entry.token,
-    error: "E-Hentai API returned no metadata for this gallery",
-  });
+  const galleries = entries.map((entry) => byKey.get(`${entry.gid}:${entry.token.toLowerCase()}`) ?? byGid.get(entry.gid) ?? { gid: entry.gid, token: entry.token, error: "E-Hentai API returned no metadata for this gallery" });
   const successCount = galleries.filter((entry) => !entry.error).length;
-  return {
-    galleries,
-    inputCount: entries.length,
-    successCount,
-    errorCount: entries.length - successCount,
-    preservedOrder: true,
-  };
+  return { galleries, inputCount: entries.length, successCount, errorCount: entries.length - successCount, preservedOrder: true };
+}
+
+export function pageRefKey({ gid, pageToken, page }: PageRef): string {
+  return `${gid}:${pageToken.toLowerCase()}:${page}`;
+}
+
+export function summarizeTokenBatch(entries: PageRef[], resolved: Map<string, GalleryTokenResolution>): GalleryTokenBatchResult {
+  const results = entries.map((entry) => resolved.get(pageRefKey(entry))!);
+  const successCount = results.filter((entry) => !entry.error).length;
+  return { results, inputCount: entries.length, successCount, errorCount: entries.length - successCount, preservedOrder: true };
 }
