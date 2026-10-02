@@ -45,6 +45,7 @@ import { extractSimilarGalleryTitle } from "./gallery-title.js";
 import { VERSION } from "./version.js";
 import { EhError, networkErrorContext } from "./errors.js";
 import { isLoginPage, authRejected, authRequired, validateCookies } from "./client/auth.js";
+import { matchMetadataEntries, summarizeMetadataBatch } from "./client/metadata.js";
 import { HttpStatusError, readTextWithLimit, retryAfterMilliseconds, serializeCookies, sleepWithSignal } from "./client/request.js";
 const TAG_TRANSLATION_DATABASE_URL = "https://raw.githubusercontent.com/EhTagTranslation/Database/release/db.text.json";
 const TAG_TRANSLATION_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
@@ -211,12 +212,7 @@ export class EhClient {
       });
       return body.gmetadata;
     }));
-    const byKey = new Map(metadata.filter((entry) => entry.token).map((entry) => [refKey(entry as GalleryRef), entry]));
-    const byGid = new Map(metadata.map((entry) => [Number(entry.gid), entry]));
-    return entries.flatMap((entry) => {
-      const result = byKey.get(refKey(entry)) ?? byGid.get(entry.gid);
-      return result ? [result] : [];
-    });
+    return matchMetadataEntries(metadata, entries);
   }
 
   async getGalleryMetadataBatch(entries: GalleryRef[], site: EhSite = "e-hentai"): Promise<GalleryMetadataBatchResult> {
@@ -224,22 +220,9 @@ export class EhClient {
     for (let index = 0; index < entries.length; index += 25) {
       const batch = entries.slice(index, index + 25);
       const results = await this.getGalleryMetadata(batch, site);
-      const byKey = new Map(results.map((entry) => [`${entry.gid}:${entry.token?.toLowerCase() ?? ""}`, entry]));
-      const byGid = new Map(results.map((entry) => [Number(entry.gid), entry]));
-      galleries.push(...batch.map((entry) => byKey.get(`${entry.gid}:${entry.token.toLowerCase()}`) ?? byGid.get(entry.gid) ?? {
-        gid: entry.gid,
-        token: entry.token,
-        error: "E-Hentai API returned no metadata for this gallery",
-      }));
+      galleries.push(...summarizeMetadataBatch(results, batch).galleries);
     }
-    const successCount = galleries.filter((entry) => !entry.error).length;
-    return {
-      galleries,
-      inputCount: entries.length,
-      successCount,
-      errorCount: entries.length - successCount,
-      preservedOrder: true,
-    };
+    return summarizeMetadataBatch(galleries, entries);
   }
 
   async resolveGalleryToken(ref: PageRef, site: EhSite = "e-hentai"): Promise<GalleryRef> {
