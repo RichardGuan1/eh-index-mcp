@@ -50,6 +50,7 @@ import { pageRefKey, summarizeTokenBatch } from "./client/resolution.js";
 import { collectGallerySearchPages, toBatchSearchResult } from "./client/search.js";
 import { galleryPagesCacheKey, imagePageCacheKey, combineGalleryPages } from "./client/pages.js";
 import { addGalleryCandidate, compareGalleryMetadata } from "./client/versions.js";
+import { tagDefinitionCacheKey, tagDefinitionUrl, galleryCacheKey } from "./client/domain.js";
 import { HttpStatusError, readTextWithLimit, retryAfterMilliseconds, serializeCookies, sleepWithSignal } from "./client/request.js";
 const TAG_TRANSLATION_DATABASE_URL = "https://raw.githubusercontent.com/EhTagTranslation/Database/release/db.text.json";
 const TAG_TRANSLATION_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
@@ -460,14 +461,14 @@ export class EhClient {
   }
 
   async getGalleryDetail(ref: GalleryRef, site: EhSite = "e-hentai"): Promise<GalleryDetailResult> {
-    return this.#cached(`detail:${site}:${ref.gid}:${ref.token}`, this.#longCacheTtlMs, () => this.#pageLimiter.run(async () => {
+    return this.#cached(galleryCacheKey("detail", site, ref), this.#longCacheTtlMs, () => this.#pageLimiter.run(async () => {
       const response = await this.#request(galleryUrl(ref, site), site);
       return parseGalleryDetail(await response.text(), ref, site);
     }));
   }
 
   async getGalleryComments(ref: GalleryRef, site: EhSite = "e-hentai", includeHidden = false): Promise<GalleryCommentsResult> {
-    return this.#cached(`comments:${site}:${ref.gid}:${ref.token}:${includeHidden}`, this.#longCacheTtlMs, () => this.#pageLimiter.run(async () => {
+    return this.#cached(galleryCacheKey("comments", site, ref, `:${includeHidden}`), this.#longCacheTtlMs, () => this.#pageLimiter.run(async () => {
       const url = new URL(galleryUrl(ref, site));
       if (includeHidden) url.searchParams.set("hc", "1");
       const response = await this.#request(url.toString(), site);
@@ -476,7 +477,7 @@ export class EhClient {
   }
 
   async getTorrents(ref: GalleryRef, site: EhSite = "e-hentai"): Promise<GalleryTorrent[]> {
-    return this.#cached(`torrents:${site}:${ref.gid}:${ref.token}`, this.#longCacheTtlMs, () => this.#pageLimiter.run(async () => {
+    return this.#cached(galleryCacheKey("torrents", site, ref), this.#longCacheTtlMs, () => this.#pageLimiter.run(async () => {
       const response = await this.#request(galleryTorrentsUrl(ref, site), site);
       return parseTorrents(await response.text(), site);
     }));
@@ -502,9 +503,8 @@ export class EhClient {
     if (!normalized || normalized.length > 100 || /[\x00-\x1f\x7f]/.test(normalized)) {
       throw new Error("Tag name must contain 1-100 printable characters");
     }
-    const slug = normalized.replace(/\s+/g, "_");
-    const url = `https://ehwiki.org/wiki/${encodeURIComponent(slug)}`;
-    return this.#cached(`tag-definition:${slug.toLowerCase()}`, this.#longCacheTtlMs, () => this.#pageLimiter.run(async () => {
+    const url = tagDefinitionUrl(normalized);
+    return this.#cached(tagDefinitionCacheKey(normalized), this.#longCacheTtlMs, () => this.#pageLimiter.run(async () => {
       const response = await this.#request(url, "e-hentai");
       return parseTagDefinition(await response.text(), url);
     }));
