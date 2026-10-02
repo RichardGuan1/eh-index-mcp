@@ -46,6 +46,7 @@ import { VERSION } from "./version.js";
 import { EhError, networkErrorContext } from "./errors.js";
 import { isLoginPage, authRejected, authRequired, validateCookies } from "./client/auth.js";
 import { matchMetadataEntries, summarizeMetadataBatch } from "./client/metadata.js";
+import { pageRefKey, summarizeTokenBatch } from "./client/resolution.js";
 import { HttpStatusError, readTextWithLimit, retryAfterMilliseconds, serializeCookies, sleepWithSignal } from "./client/request.js";
 const TAG_TRANSLATION_DATABASE_URL = "https://raw.githubusercontent.com/EhTagTranslation/Database/release/db.text.json";
 const TAG_TRANSLATION_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
@@ -261,8 +262,7 @@ export class EhClient {
     if (entries.length < 1 || entries.length > 500) {
       throw new Error("Batch gallery-token resolution requires between 1 and 500 entries");
     }
-    const entryKey = ({ gid, pageToken, page }: PageRef) => `${gid}:${pageToken.toLowerCase()}:${page}`;
-    const uniqueEntries = [...new Map(entries.map((entry) => [entryKey(entry), entry])).values()];
+    const uniqueEntries = [...new Map(entries.map((entry) => [pageRefKey(entry), entry])).values()];
     const resolved = new Map<string, GalleryTokenResolution>();
     for (let index = 0; index < uniqueEntries.length; index += 25) {
       const batch = uniqueEntries.slice(index, index + 25);
@@ -294,20 +294,12 @@ export class EhClient {
             stage: "api-response",
           });
         }
-        resolved.set(entryKey(entry), row?.token
+        resolved.set(pageRefKey(entry), row?.token
           ? { ...entry, token: row.token }
           : { ...entry, error: row?.error ?? "E-Hentai API returned no result for this page" });
       });
     }
-    const results = entries.map((entry) => resolved.get(entryKey(entry))!);
-    const successCount = results.filter((entry) => !entry.error).length;
-    return {
-      results,
-      inputCount: entries.length,
-      successCount,
-      errorCount: entries.length - successCount,
-      preservedOrder: true,
-    };
+    return summarizeTokenBatch(entries, resolved);
   }
 
   async search(options: SearchOptions): Promise<GalleryListResult> {
