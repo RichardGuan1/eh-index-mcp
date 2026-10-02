@@ -1,5 +1,35 @@
-import type { EhSite } from "../types.js";
+import { load, type CheerioAPI } from "cheerio";
+import type { EhSite, GalleryDetailResult } from "../types.js";
 import { EhError } from "../errors.js";
+
+export function numberFromText(value: string, fallback = 0): number {
+  const number = Number.parseInt(value.replace(/[^0-9-]/g, ""), 10);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+export function textValue($: CheerioAPI, selector: string): string | null {
+  const value = $(selector).first().text().replace(/\u00a0/g, " ").trim();
+  return value || null;
+}
+
+export function detailRows($: CheerioAPI): Map<string, string> {
+  const rows = new Map<string, string>();
+  $("#gdd tr").each((_, row) => {
+    const key = $(row).find(".gdt1").first().text().trim().replace(/:$/, "");
+    const value = $(row).find(".gdt2").first().text().replace(/\u00a0/g, " ").trim();
+    if (key) rows.set(key, value);
+  });
+  return rows;
+}
+
+export function galleryDescription($: CheerioAPI): GalleryDetailResult["description"] {
+  const node = $("#gld").first().clone();
+  if (!node.length) return null;
+  node.find("script, style, noscript").remove();
+  node.find("br").replaceWith("\n");
+  const text = node.text().replace(/\r/g, "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  return text ? { text, untrusted: true } : null;
+}
 
 export function assertNotChallengePage(html: string, site: EhSite = "e-hentai"): void {
   if (/Just a moment|challenge-platform|cf-chl-|cf_chl_/i.test(html)) {
