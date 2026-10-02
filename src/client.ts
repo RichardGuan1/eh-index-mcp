@@ -48,6 +48,7 @@ import { isLoginPage, authRejected, authRequired, validateCookies } from "./clie
 import { matchMetadataEntries, summarizeMetadataBatch } from "./client/metadata.js";
 import { pageRefKey, summarizeTokenBatch } from "./client/resolution.js";
 import { collectGallerySearchPages, toBatchSearchResult } from "./client/search.js";
+import { galleryPagesCacheKey, imagePageCacheKey, combineGalleryPages } from "./client/pages.js";
 import { HttpStatusError, readTextWithLimit, retryAfterMilliseconds, serializeCookies, sleepWithSignal } from "./client/request.js";
 const TAG_TRANSLATION_DATABASE_URL = "https://raw.githubusercontent.com/EhTagTranslation/Database/release/db.text.json";
 const TAG_TRANSLATION_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
@@ -637,7 +638,7 @@ export class EhClient {
 
   async getGalleryPages(ref: GalleryRef, site: EhSite = "e-hentai", previewPage = 0): Promise<GalleryPagesResult> {
     if (!Number.isInteger(previewPage) || previewPage < 0) throw new Error("Preview page must be a non-negative integer");
-    return this.#cached(`pages:${site}:${ref.gid}:${ref.token}:${previewPage}`, this.#longCacheTtlMs, () => this.#pageLimiter.run(async () => {
+    return this.#cached(galleryPagesCacheKey(site, ref.gid, ref.token, previewPage), this.#longCacheTtlMs, () => this.#pageLimiter.run(async () => {
       const url = new URL(galleryUrl(ref, site));
       if (previewPage > 0) url.searchParams.set("p", String(previewPage));
       const response = await this.#request(url.toString(), site);
@@ -654,17 +655,11 @@ export class EhClient {
     for (let previewPage = 1; previewPage < previewPageCount; previewPage += 1) {
       batches.push(await this.getGalleryPages(ref, site, previewPage));
     }
-    const pages = [...new Map(batches.flatMap((batch) => batch.pages).map((page) => [page.page, page])).values()]
-      .sort((left, right) => left.page - right.page)
-      .filter((page) => page.page <= first.totalPages);
-    if (pages.length !== first.totalPages) {
-      throw new Error(`Gallery page enumeration incomplete: expected ${first.totalPages}, received ${pages.length}`);
-    }
-    return { totalPages: first.totalPages, pages, previewPagesFetched: previewPageCount };
+    return combineGalleryPages(batches, first.totalPages, previewPageCount);
   }
 
   async getImagePage(ref: PageRef, site: EhSite = "e-hentai"): Promise<ImagePageResult> {
-    return this.#cached(`image:${site}:${ref.gid}:${ref.pageToken}:${ref.page}`, this.#shortCacheTtlMs, () => this.#pageLimiter.run(async () => {
+    return this.#cached(imagePageCacheKey(site, ref.gid, ref.pageToken, ref.page), this.#shortCacheTtlMs, () => this.#pageLimiter.run(async () => {
       const response = await this.#request(pageUrl(ref, site), site);
       return parseImagePage(await response.text(), site);
     }));
