@@ -49,6 +49,7 @@ import { matchMetadataEntries, summarizeMetadataBatch } from "./client/metadata.
 import { pageRefKey, summarizeTokenBatch } from "./client/resolution.js";
 import { collectGallerySearchPages, toBatchSearchResult } from "./client/search.js";
 import { galleryPagesCacheKey, imagePageCacheKey, combineGalleryPages } from "./client/pages.js";
+import { addGalleryCandidate, compareGalleryMetadata } from "./client/versions.js";
 import { HttpStatusError, readTextWithLimit, retryAfterMilliseconds, serializeCookies, sleepWithSignal } from "./client/request.js";
 const TAG_TRANSLATION_DATABASE_URL = "https://raw.githubusercontent.com/EhTagTranslation/Database/release/db.text.json";
 const TAG_TRANSLATION_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
@@ -578,10 +579,7 @@ export class EhClient {
     if (!root) throw new Error(`Gallery chain lookup returned no entry for gid ${ref.gid}`);
     if (root.error) throw new Error(`Gallery chain lookup failed for gid ${ref.gid}: ${root.error}`);
     const candidates = new Map<number, GalleryRef>();
-    const add = (gid: string | number | undefined, token: string | undefined) => {
-      const numeric = Number(gid);
-      if (Number.isInteger(numeric) && numeric > 0 && token && !candidates.has(numeric)) candidates.set(numeric, { gid: numeric, token });
-    };
+
     let detail;
     try {
       detail = await this.getGalleryDetail(ref, site);
@@ -589,11 +587,11 @@ export class EhClient {
       const reason = error instanceof Error ? error.message : String(error);
       throw new Error(`Gallery chain detail lookup failed for gid ${ref.gid}: ${reason}`, { cause: error });
     }
-    add(root.first_gid, root.first_key);
-    if (detail.gallery.parent) add(detail.gallery.parent.gid, detail.gallery.parent.token);
-    add(root.gid, root.token ?? ref.token);
-    for (const version of detail.newerVersions) add(version.gid, version.token);
-    add(root.current_gid, root.current_key);
+    addGalleryCandidate(candidates, root.first_gid, root.first_key);
+    if (detail.gallery.parent) addGalleryCandidate(candidates, detail.gallery.parent.gid, detail.gallery.parent.token);
+    addGalleryCandidate(candidates, root.gid, root.token ?? ref.token);
+    for (const version of detail.newerVersions) addGalleryCandidate(candidates, version.gid, version.token);
+    addGalleryCandidate(candidates, root.current_gid, root.current_key);
     return (await this.getGalleryMetadataBatch([...candidates.values()], site)).galleries;
   }
 
@@ -612,28 +610,7 @@ export class EhClient {
     if (!before || !after) throw new Error("Gallery version comparison returned incomplete metadata");
     if (before.error) throw new Error(`Before gallery metadata failed: ${before.error}`);
     if (after.error) throw new Error(`After gallery metadata failed: ${after.error}`);
-    const numberValue = (value: string | number | undefined): number | null => {
-      const numeric = Number(value);
-      return Number.isFinite(numeric) ? numeric : null;
-    };
-    const beforeCount = numberValue(before.filecount);
-    const afterCount = numberValue(after.filecount);
-    const beforeSize = numberValue(before.filesize);
-    const afterSize = numberValue(after.filesize);
-    const beforeTags = new Set(before.tags ?? []);
-    const afterTags = new Set(after.tags ?? []);
-    return {
-      before,
-      after,
-      changes: {
-        title: { before: before.title ?? null, after: after.title ?? null },
-        posted: { before: before.posted ?? null, after: after.posted ?? null },
-        filecount: { before: beforeCount, after: afterCount, delta: beforeCount !== null && afterCount !== null ? afterCount - beforeCount : null },
-        filesize: { before: beforeSize, after: afterSize, delta: beforeSize !== null && afterSize !== null ? afterSize - beforeSize : null },
-        tagsAdded: [...afterTags].filter((tag) => !beforeTags.has(tag)).sort(),
-        tagsRemoved: [...beforeTags].filter((tag) => !afterTags.has(tag)).sort(),
-      },
-    };
+    return { before, after, changes: compareGalleryMetadata(before, after) };
   }
 
   async getGalleryPages(ref: GalleryRef, site: EhSite = "e-hentai", previewPage = 0): Promise<GalleryPagesResult> {
