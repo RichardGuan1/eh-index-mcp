@@ -18,117 +18,13 @@ import type {
 } from "./types.js";
 import { parseGalleryUrl, parsePageUrl } from "./urls.js";
 import { EhError } from "./errors.js";
-import { assertNotChallengePage } from "./parsers/shared.js";
+import { assertNotChallengePage, numberFromText, isNotNull } from "./parsers/shared.js";
 export { assertNotChallengePage } from "./parsers/shared.js";
 export { parseGalleryComments, parseTorrents } from "./parsers/comments-torrents.js";
 export { parseImagePage } from "./parsers/image-page.js";
 export { parseGalleryPages } from "./parsers/gallery-pages.js";
 export { parseGalleryDetail } from "./parsers/gallery-detail.js";
-
-function cursorFromHref(href: string | undefined, key: "prev" | "next"): string | null {
-  if (!href) return null;
-  return new URL(href, "https://e-hentai.org").searchParams.get(key);
-}
-
-function parseRating($: CheerioAPI, element: unknown): number | null {
-  const rating = $(element as never).find(".ir").first();
-  const titleValue = Number.parseFloat(rating.attr("title") ?? "");
-  if (Number.isFinite(titleValue)) return titleValue;
-
-  const values = [...(rating.attr("style") ?? "").matchAll(/(\d+)px/g)].map((match) => Number(match[1]));
-  if (values.length < 2) return null;
-  const base = 5 - Math.floor(values[0]! / 16);
-  return values[1] === 21 ? base - 0.5 : base;
-}
-
-function numberFromText(value: string, fallback = 0): number {
-  const number = Number.parseInt(value.replace(/[^0-9-]/g, ""), 10);
-  return Number.isFinite(number) ? number : fallback;
-}
-
-function isNotNull<T>(value: T | null): value is T {
-  return value !== null;
-}
-
-function textValue($: CheerioAPI, selector: string): string | null {
-  const value = $(selector).first().text().replace(/\u00a0/g, " ").trim();
-  return value || null;
-}
-
-function detailRows($: CheerioAPI): Map<string, string> {
-  const rows = new Map<string, string>();
-  $("#gdd tr").each((_, row) => {
-    const key = $(row).find(".gdt1").first().text().trim().replace(/:$/, "");
-    const value = $(row).find(".gdt2").first().text().replace(/\u00a0/g, " ").trim();
-    if (key) rows.set(key, value);
-  });
-  return rows;
-}
-
-function galleryDescription($: CheerioAPI): GalleryDetailResult["description"] {
-  const node = $("#gld").first().clone();
-  if (!node.length) return null;
-  node.find("script, style, noscript").remove();
-  node.find("br").replaceWith("\n");
-  const text = node.text()
-    .replace(/\r/g, "")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-  return text ? { text, untrusted: true } : null;
-}
-
-function parseGalleryRow($: CheerioAPI, element: unknown, site: EhSite): GallerySummary | null {
-  const row = $(element as never);
-  const href = row.find(".glname a[href*='/g/'], a[href*='/g/']").first().attr("href");
-  if (!href) return null;
-  const baseUrl = site === "exhentai" ? "https://exhentai.org" : "https://e-hentai.org";
-
-  let ref;
-  try {
-    ref = parseGalleryUrl(new URL(href, baseUrl).toString());
-  } catch {
-    return null;
-  }
-
-  const pagesMatch = row.find(".glhide, .gl2m, .gl2c, .gl4c, .gl3e, .gl5t").text().match(/(\d+)\s+pages?/i);
-  const thumbnail = row.find(".glthumb [data-src], .glthumb img[src], .gl1e img[data-src], .gl1e img[src], .gl3t img[data-src], .gl3t img[src]").first();
-  const thumbnailUrl = thumbnail.attr("data-src") ?? thumbnail.attr("src") ?? null;
-  const title = row.find(".glink").first().text().trim();
-  if (!title) return null;
-
-  return {
-    ...ref,
-    site,
-    url: new URL(href, baseUrl).toString(),
-    title,
-    category: row.find(".cn, .cs").first().text().trim(),
-    uploader: row.find("a[href*='/uploader/']").first().text().trim() || null,
-    posted: row.find(`[id='posted_${ref.gid}']`).first().text().trim() || null,
-    pages: pagesMatch ? Number(pagesMatch[1]) : null,
-    rating: parseRating($, element),
-    tags: row.find(".gt[title], .gtl[title]").map((_, tag) => $(tag).attr("title") ?? "").get().filter(Boolean),
-    thumbnailUrl,
-  };
-}
-
-export function parseGalleryList(html: string, site: EhSite = "e-hentai"): GalleryListResult {
-  assertNotChallengePage(html, site);
-  const $ = load(html);
-  const warning = $(".searchwarn").first().text().trim();
-  if (warning) throw new Error(`E-Hentai search error: ${warning}`);
-
-  const galleries = $(".itg > tbody > tr, .itg > tr, .itg .gl1t")
-    .map((_, row) => parseGalleryRow($, row, site))
-    .get()
-    .filter((gallery): gallery is GallerySummary => gallery !== null);
-
-  return {
-    galleries,
-    prev: cursorFromHref($("#uprev").attr("href"), "prev"),
-    next: cursorFromHref($("#unext").attr("href"), "next"),
-  };
-}
+export { parseGalleryList } from "./parsers/gallery-list.js";
 
 export function parseFavoriteCategories(html: string, site: EhSite = "e-hentai"): FavoriteCategoriesResult {
   assertNotChallengePage(html, site);

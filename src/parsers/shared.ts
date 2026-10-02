@@ -2,6 +2,10 @@ import { load, type CheerioAPI } from "cheerio";
 import type { EhSite, GalleryDetailResult } from "../types.js";
 import { EhError } from "../errors.js";
 
+export function isNotNull<T>(value: T | null): value is T {
+  return value !== null;
+}
+
 export function numberFromText(value: string, fallback = 0): number {
   const number = Number.parseInt(value.replace(/[^0-9-]/g, ""), 10);
   return Number.isFinite(number) ? number : fallback;
