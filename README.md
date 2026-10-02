@@ -185,6 +185,15 @@ The grouping logic reports whether each work came from an official version chain
 
 </details>
 
+## Built-in prompts
+
+The server provides four built-in prompts for common read-only workflows:
+
+- `eh_gallery_research` — search and investigate related galleries;
+- `eh_gallery_compare` — compare two gallery versions;
+- `eh_gallery_version_audit` — audit a gallery version chain;
+- `eh_tag_research` — resolve and investigate native tags.
+
 ## Authentication
 
 Authentication is optional. Public E-Hentai tools work without cookies. Favorites, archive metadata, and ExHentai require identity cookies from a browser session you control.

@@ -1,14 +1,22 @@
 # Changelog
 
+## [0.3.0] - 2026-10-01
+
+### Changed
+
+- Reorganized MCP server registration by search, gallery, version, page, and account domains without changing the 30-tool interface.
+- Reorganized client transport, authentication, metadata, pagination, search, and version workflows behind the existing `EhClient` interface.
+- Reorganized HTML parsing by gallery, page, account, tag, and shared parsing responsibilities while preserving existing parser exports.
+- Consolidated small internal helper modules into larger domain-oriented modules.
+
 ## [0.2.0] - 2026-09-30
 
 ### Added
 
-- Added typed, structured error results with stable error codes and request context.
-- Added standardized batch result summaries with input, success, error, and order-preservation counts.
-- Added explicit site fields to gallery summaries and organized gallery variants for composable references.
-- Added four read-only workflow prompts for gallery research, version comparison, version-chain auditing, and tag research.
-- Extended packaged stdio smoke coverage to prompts and structured tool-call success and error results.
+- Added stable structured error codes with retryability and request context for authentication, rate limits, challenges, upstream failures, parsing failures, and network errors.
+- Added input-count, success-count, error-count, and order-preservation fields to batch results.
+- Added explicit site fields to gallery summaries and organized gallery variants so references can be passed between tools without inferring the site from a URL.
+- Added four built-in read-only prompts for gallery research, version comparison, version-chain audits, and tag research.
 
 ## [0.1.2] - 2026-08-24
 

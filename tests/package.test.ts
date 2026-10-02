@@ -53,7 +53,7 @@ describe("package layout", () => {
     const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
     const readmeZh = readFileSync(new URL("../README.zh-CN.md", import.meta.url), "utf8");
 
-    expect(VERSION).toBe("0.2.0");
+    expect(VERSION).toBe("0.3.0");
     expect(packageJson.version).toBe(VERSION);
     expect(packageJson.mcpName).toBe("io.github.RichardGuan1/eh-index-mcp");
     expect(lockfile.version).toBe(VERSION);

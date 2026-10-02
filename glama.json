@@ -5,7 +5,7 @@
   ],
   "name": "EH Index MCP",
   "description": "A read-only MCP server for searching and exploring E-Hentai and ExHentai galleries, metadata, version chains, image pages, and translated tags.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "mcp_server",
   "status": "production",
   "transport": [

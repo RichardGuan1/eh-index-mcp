@@ -185,6 +185,15 @@ eh-index-mcp
 
 </details>
 
+## 预制提示词
+
+服务提供 4 个预制提示词，用于在 MCP 客户端中快速启动常见只读工作流：
+
+- `eh_gallery_research`：搜索并研究相关画廊；
+- `eh_gallery_compare`：比较两个画廊版本；
+- `eh_gallery_version_audit`：审查画廊版本链；
+- `eh_tag_research`：解析和研究原生标签。
+
 ## 身份认证
 
 认证是可选的。公开 E-Hentai 工具无需 Cookie。收藏、归档元数据和 ExHentai 需要你本人浏览器会话中的身份 Cookie。
